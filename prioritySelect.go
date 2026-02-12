@@ -41,16 +41,26 @@ func resourceManager(takeLow chan Resource, takeHigh chan Resource, giveBack cha
     res := Resource{}
     
     for {
+     // Gi ressursen til high hvis mulig
         select {
-        case takeHigh<- res:
-            //fmt.Printf("[resource manager]: resource taken (high)\n")
-        case takeLow<- res:
-            //fmt.Printf("[resource manager]: resource taken (low)\n")
-        case res = <-giveBack:
-            //fmt.Printf("[resource manager]: resource returned\n")
-        }
+        case takeHigh<-res: // High får ressursen
+
+         
+        default:
+     // Ellerst vent på alle, high er fortsatt med
+            select {
+         
+            case takeHigh<- res:
+                //fmt.Printf("[resource manager]: resource taken (high)\n")
+            case takeLow<- res:
+                //fmt.Printf("[resource manager]: resource taken (low)\n")
+            }
     }
+     // ressurs blir returverdi ?
+    res = <-giveBack:
+    //fmt.Printf("[resource manager]: resource returned\n")
 }
+ 
     
 
 // --- RESOURCE USERS -- //
