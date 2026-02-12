@@ -8,7 +8,7 @@ import (
 func main() {
 	addr := net.UDPAddr{
 		IP:  net.ParseIP("0.0.0.0"),   //Hører på alle nettverksgrensesnitt på port 30000
-		Port: 20022, // Porten på pcen vår. 
+		Port: 20023, // Porten på pcen vår. 
 	}
 
 	recvSock, _ := net.ListenUDP("udp", &addr) // Den oppretter UDP socket og binder til adressen over. 
