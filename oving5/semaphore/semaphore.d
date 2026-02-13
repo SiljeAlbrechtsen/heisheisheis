@@ -38,7 +38,7 @@ class Resource(T) {
         if(busy){ // om den er låst så venter vi
             numWaiting[priority]++; //Vi sier at noen venter på ressursen
             mtx.notify(); //låser opp mutex
-            sems[priority].wait(); //Venter på semamorfen, og blokerer oss selv
+            sems[priority].wait(); //Venter på semaforen, og blokerer oss selv
 
             mtx.wait();   //låser mutex
             numWaiting[priority]--; // fjerner oss fra vente-køen
@@ -46,11 +46,9 @@ class Resource(T) {
 
         busy = true; // setter busy til true siden vi bruker den
 
-        auto v = value;  //kopierer verdi som skal returneres
-
         mtx.notify();  // låser opp mutex
 
-        return v;  //returnerer v
+        return value;  //returnerer v
     }
     
     void deallocate(T v){

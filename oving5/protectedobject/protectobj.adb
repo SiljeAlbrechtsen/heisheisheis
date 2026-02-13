@@ -30,25 +30,28 @@ procedure protectobj is
     end Resource;
     protected body Resource is
     
-        entry allocateLow(val: out IntVec.Vector) when (not busy) and (allocateHigh'Count = ) is
+    -- entry med guard = inngang med betingelse, for å låne ressurs med lav prioritet
+        entry allocateLow(val: out IntVec.Vector) when (not busy) and allocateHigh'Count = 0 is
         begin
             --Put_Line("allocateLow");
             busy := True;
             val := value;
         end allocateLow;
     
+    -- entry med guard = inngang med betingelse, for å låne ressurs med høy prioritet
         entry allocateHigh(val: out IntVec.Vector) when (not busy) is
         begin
             --Put_Line("allocateHigh");
-            busy := True
+            busy := True;
             val := value;
         end allocateHigh;
 
+    -- leverer ressurs tilbake
         procedure deallocate(val: IntVec.Vector) is
         begin
             --Put_Line("deallocate");
             value := val;
-            busy := False
+            busy := False; -- vil automatisk sjekke alle guard på entries og slippe inn en task som kan passere guarden, istedenfor notify all
         end deallocate;
 
     end Resource;

@@ -21,7 +21,7 @@ func main() {
 	fmt.Println("B: A startet. Nå sender B data i loop:")
 
 	serverIP := net.ParseIP("127.0.0.1") // Denne IP-adressen er local host
-	serverPort := 20022
+	serverPort := 20023
 
 	// Kombinerer IP + Port til en UDP adresse
 	serverAddr := &net.UDPAddr{

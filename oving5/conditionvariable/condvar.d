@@ -49,8 +49,6 @@ class Resource(T) {
             cond.wait();  // vente
         }
 
-       
-
         mtx.unlock();
 
         return value;

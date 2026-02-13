@@ -44,7 +44,6 @@ func resourceManager(takeLow chan Resource, takeHigh chan Resource, giveBack cha
      // Gi ressursen til high hvis mulig
         select {
         case takeHigh<-res: // High får ressursen
-
          
         default:
      // Ellerst vent på alle, high er fortsatt med
@@ -57,8 +56,9 @@ func resourceManager(takeLow chan Resource, takeHigh chan Resource, giveBack cha
             }
     }
      // ressurs blir returverdi ?
-    res = <-giveBack:
+    res = <-giveBack;
     //fmt.Printf("[resource manager]: resource returned\n")
+}
 }
  
     

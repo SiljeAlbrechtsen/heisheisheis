@@ -11,7 +11,7 @@ func main() {
 
 	addr := net.UDPAddr{
 		IP:   net.ParseIP("127.0.0.1"), //Hører på alle nettverksgrensesnitt på port 30000
-		Port: 20022,                    // Porten på pcen vår.
+		Port: 20023,                    // Porten på pcen vår.
 	}
 
 	recvSock, _ := net.ListenUDP("udp", &addr) // Den oppretter UDP socket og binder til adressen over.
@@ -25,16 +25,6 @@ func main() {
 		missThreshold = 3                       // hvor mange på rad vi tåler
 	)
 	misses := 0
-
-	//localIP := getLocalIP()
-
-	/*for i := 0; i < 7; i++ {
-		n, fromWho, _ := recvSock.ReadFromUDP(buffer)             //Fyller buffer med date, og returnerer antall bytes n, og ip:port til fromWHo
-		msg := string(buffer[:n])                                 // Gjøre buffer om til string
-		fmt.Printf("Mottatt fra %s: %s\n", fromWho.String(), msg) // skrivver ut melding fra server
-
-		//time.Sleep(time.Second)
-	}*/
 
 	for {
 		// Deadline: hvis vi ikke får pakke innen readTimeout => timeout error
@@ -62,6 +52,4 @@ func main() {
 		msg := string(buffer[:n])
 		fmt.Printf("A: mottatt fra %s: %s\n", fromWho.String(), msg)
 	}
-
-	fmt.Println("Program terminerer nå")
 }
