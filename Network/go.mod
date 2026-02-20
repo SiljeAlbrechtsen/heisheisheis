@@ -1,3 +1,3 @@
-module Network-go
+module Network
 
 go 1.16
