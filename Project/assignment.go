@@ -5,6 +5,16 @@ import (
 	// Må importere heiskode som har funksjonene chooseDirection og shouldStop
 )
 
+/*
+Input:
+Hall requests 
+Elevator states 
+Elevator ID (local)
+
+*/
+
+
+
 // Array-størrelse må være kjent i go ved kompileringstid.
 const (
 	NFloors  = 4
