@@ -33,28 +33,25 @@ type MergedWorldviews struct {
 
 lastWorldview := make(map[string]Worldview)
 
-func getHallOrdersFromWorldview(wv map[string]WorldView, id string) HallOrders {
 
-
-	return wv.hallOrders
-}
-
-func hallOrdersEqual(worldviews map[string]WorldView) bool {
-	if len(worldviews) <= 1{
+func hallOrdersEqual(worldview map[string]WorldView) bool {
+	if len(worldview) <= 1{
 		return true	
 	}
 
 	var reference [NumFloors][NumButtons]OrderState
 	first := true
 
-	for _, wv := range worldviews {
+	for _, w := range worldview { // for key, value TODO: Bytte w med noe annet
 		if first {
-			reference = wv.hallOrders
+			reference = w.hallOrders
 			first = false
 		}
-		if w.HallOrders != reference {
+		if w.HallOrders != reference { // Go kan sammenligne arrays direkte
 			return false
 		}
-
+	}
 	return true		
 }
+
+func MergeWorldviews
