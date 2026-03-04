@@ -1,252 +1,100 @@
-/*package main
+package main
 
 import (
 	"fmt"
+	"time"
 )
 
 func main() {
-	e := elevator.Elevator{
-		floor: 1,
-		dirn:  elevator.D_Up,
-		requests: [4][3]int{
-			{0, 0, 0}, // floor 0
-			{1, 0, 1}, // floor 1: HallUp + Cab
-			{0, 1, 0}, // floor 2: HallDown
-			{0, 0, 0}, // floor 3
-		},
+	fmt.Println("Started!")
+
+	e := elevator_uninitialized()
+	inputPollRateMs := 25
+
+	ConLoad("elevator.con", func(key, val string) {
+		switch key {
+		case "dooropenduration_s":
+			fmt.Sscanf(val, "%f", &e.config.doorOpenDuration_s)
+		case "inputpollrate_ms":
+			fmt.Sscanf(val, "%d", &inputPollRateMs)
+		}
+	})
+
+	if elevator_floorSensor() == -1 {
+		FsmOnInitBetweenFloors(&e)
 	}
 
-	elevator.elevator_print(e)
+	prevButtons := [N_FLOORS][N_BUTTONS]int{}
+	prevFloor := -1
+	prevStop := 0
+	prevObstruction := 0
 
-	pair := elevator.requests_chooseDirection(e)
-	fmt.Printf("chooseDirection: dir=%s, behaviour=%s\n",
-		elevator.elevator_dirnToString(pair.dirn),
-		elevator.elevator_behaviorToString(pair.behaviour))
-
-	fmt.Printf("shouldStop: %v\n", elevator.requests_shouldStop(e))
-}*/
-
-package main
-
-import "fmt"
-
-// ===== ALL YOUR ELEVATOR CODE HERE =====
-
-// Constants
-const N_FLOORS = 4
-const N_BUTTONS = 3
-
-// Types
-type Button int
-
-const (
-	B_HallUp Button = iota
-	B_HallDown
-	B_Cab
-)
-
-type Behaviour int
-
-const (
-	EB_Idle Behaviour = iota
-	EB_DoorOpen
-	EB_Moving
-)
-
-type Direction int
-
-const (
-	D_Up Direction = iota
-	D_Down
-	D_Stop
-)
-
-type DirnBehaviourPair struct {
-	dirn      Direction
-	behaviour Behaviour
-}
-
-type Elevator struct {
-	floor     int
-	dirn      Direction
-	behaviour Behaviour
-	requests  [N_FLOORS][N_BUTTONS]int
-	config    struct {
-		doorOpenDuration_s float64
-	}
-}
-
-// Elevator functions (from elevator.c)
-func elevator_behaviorToString(eb Behaviour) string {
-	switch eb {
-	case EB_Idle:
-		return "EB_Idle"
-	case EB_DoorOpen:
-		return "EB_DoorOpen"
-	case EB_Moving:
-		return "EB_Moving"
-	default:
-		return "EB_UNDEFINED"
-	}
-}
-
-func elevator_dirnToString(d Direction) string {
-	switch d {
-	case D_Up:
-		return "D_Up"
-	case D_Down:
-		return "D_Down"
-	case D_Stop:
-		return "D_Stop"
-	default:
-		return "D_UNDEFINED"
-	}
-}
-
-func elevator_buttonToString(b Button) string {
-	switch b {
-	case B_HallUp:
-		return "B_HallUp"
-	case B_HallDown:
-		return "B_HallDown"
-	case B_Cab:
-		return "B_Cab"
-	default:
-		return "B_UNDEFINED"
-	}
-}
-
-func elevator_print(es Elevator) {
-	fmt.Printf("  +--------------------+\n")
-	fmt.Printf("  |floor = %-2d          |\n", es.floor)
-	fmt.Printf("  |dirn  = %-12.12s|\n", elevator_dirnToString(es.dirn))
-	fmt.Printf("  |behav = %-12.12s|\n", elevator_behaviorToString(es.behaviour))
-	fmt.Printf("  +--------------------+\n")
-	fmt.Printf("  |  | up  | dn  | cab |\n")
-	for f := N_FLOORS - 1; f >= 0; f-- {
-		fmt.Printf("  | %d", f)
-		for btn := 0; btn < N_BUTTONS; btn++ {
-			if (f == N_FLOORS-1 && btn == int(B_HallUp)) || (f == 0 && btn == int(B_HallDown)) {
-				fmt.Printf("|     ")
+	for {
+		stop := elevator_stopButton()
+		if stop != prevStop {
+			elevator_stopButtonLight(stop)
+			if stop != 0 {
+				elevator_motorDirection(D_Stop)
+				e.dirn = D_Stop
+				for f := 0; f < N_FLOORS; f++ {
+					for b := 0; b < N_BUTTONS; b++ {
+						e.requests[f][b] = 0
+					}
+				}
+				setAllLights(e)
+				TimerStop()
 			} else {
-				if es.requests[f][btn] != 0 {
-					fmt.Printf("|  #  ")
+				if e.floor != -1 {
+					e.behaviour = EB_DoorOpen
+					elevator_doorLight(1)
+					TimerStart(e.config.doorOpenDuration_s)
 				} else {
-					fmt.Printf("|  -  ")
+					FsmOnInitBetweenFloors(&e)
 				}
 			}
 		}
-		fmt.Printf("|\n")
-	}
-	fmt.Printf("  +--------------------+\n")
-}
+		prevStop = stop
+		if stop != 0 {
+			time.Sleep(time.Duration(inputPollRateMs) * time.Millisecond)
+			continue
+		}
 
-// Requests functions (from requests.c)
-func requests_above(e Elevator) bool {
-	for f := e.floor + 1; f < N_FLOORS; f++ {
-		for btn := 0; btn < N_BUTTONS; btn++ {
-			if e.requests[f][btn] != 0 {
-				return true
+		obstruction := elevator_obstruction()
+		if obstruction != prevObstruction {
+			if obstruction != 0 {
+				elevator_motorDirection(D_Stop)
+			} else if e.behaviour == EB_Moving {
+				elevator_motorDirection(e.dirn)
 			}
 		}
-	}
-	return false
-}
+		prevObstruction = obstruction
 
-func requests_below(e Elevator) bool {
-	for f := 0; f < e.floor; f++ {
-		for btn := 0; btn < N_BUTTONS; btn++ {
-			if e.requests[f][btn] != 0 {
-				return true
+		for f := 0; f < N_FLOORS; f++ {
+			for b := 0; b < N_BUTTONS; b++ {
+				v := elevator_requestButton(f, Button(b))
+				if v != 0 && v != prevButtons[f][b] {
+					FsmOnRequestButtonPress(&e, f, Button(b))
+				}
+				prevButtons[f][b] = v
 			}
 		}
+
+		floor := elevator_floorSensor()
+		if floor != -1 && floor != prevFloor {
+			FsmOnFloorArrival(&e, floor)
+		}
+		prevFloor = floor
+
+		if TimerTimedOut() {
+			if obstruction != 0 {
+				TimerStart(e.config.doorOpenDuration_s)
+				time.Sleep(time.Duration(inputPollRateMs) * time.Millisecond)
+				continue
+			}
+			TimerStop()
+			FsmOnDoorTimeout(&e)
+		}
+
+		time.Sleep(time.Duration(inputPollRateMs) * time.Millisecond)
 	}
-	return false
-}
-
-func requests_here(e Elevator) bool {
-	for btn := 0; btn < N_BUTTONS; btn++ {
-		if e.requests[e.floor][btn] != 0 {
-			return true
-		}
-	}
-	return false
-}
-
-func requests_chooseDirection(e Elevator) DirnBehaviourPair {
-	switch e.dirn {
-	case D_Up:
-		if requests_above(e) {
-			return DirnBehaviourPair{D_Up, EB_Moving}
-		}
-		if requests_here(e) {
-			return DirnBehaviourPair{D_Down, EB_DoorOpen}
-		}
-		if requests_below(e) {
-			return DirnBehaviourPair{D_Down, EB_Moving}
-		}
-		return DirnBehaviourPair{D_Stop, EB_Idle}
-	case D_Down:
-		if requests_below(e) {
-			return DirnBehaviourPair{D_Down, EB_Moving}
-		}
-		if requests_here(e) {
-			return DirnBehaviourPair{D_Up, EB_DoorOpen}
-		}
-		if requests_above(e) {
-			return DirnBehaviourPair{D_Up, EB_Moving}
-		}
-		return DirnBehaviourPair{D_Stop, EB_Idle}
-	case D_Stop:
-		if requests_here(e) {
-			return DirnBehaviourPair{D_Stop, EB_DoorOpen}
-		}
-		if requests_above(e) {
-			return DirnBehaviourPair{D_Up, EB_Moving}
-		}
-		if requests_below(e) {
-			return DirnBehaviourPair{D_Down, EB_Moving}
-		}
-		return DirnBehaviourPair{D_Stop, EB_Idle}
-	default:
-		return DirnBehaviourPair{D_Stop, EB_Idle}
-	}
-}
-
-func requests_shouldStop(e Elevator) bool {
-	switch e.dirn {
-	case D_Down:
-		return e.requests[e.floor][B_HallDown] != 0 ||
-			e.requests[e.floor][B_Cab] != 0 ||
-			!requests_below(e)
-	case D_Up:
-		return e.requests[e.floor][B_HallUp] != 0 ||
-			e.requests[e.floor][B_Cab] != 0 ||
-			!requests_above(e)
-	default:
-		return true
-	}
-}
-
-// ===== YOUR TEST CODE =====
-func main() {
-	e := Elevator{
-		floor: 1,
-		dirn:  D_Up,
-		requests: [4][3]int{
-			{0, 0, 0}, // floor 0
-			{1, 0, 1}, // floor 1: HallUp + Cab
-			{0, 1, 0}, // floor 2: HallDown
-			{0, 0, 0}, // floor 3
-		},
-	}
-
-	elevator_print(e)
-
-	pair := requests_chooseDirection(e)
-	fmt.Printf("chooseDirection: dir=%s, behaviour=%s\n",
-		elevator_dirnToString(pair.dirn),
-		elevator_behaviorToString(pair.behaviour))
-
-	fmt.Printf("shouldStop: %v\n", requests_shouldStop(e))
 }

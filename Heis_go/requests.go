@@ -1,4 +1,4 @@
-package elevator
+package main
 
 // requests_above returns true if there are any requests above current floor
 func requests_above(e Elevator) bool {
