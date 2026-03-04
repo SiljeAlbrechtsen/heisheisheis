@@ -8,7 +8,7 @@ func addNewPeerToWorldview(p peers.PeerUpdate, hbMap map[string]Worldview){
 	// sjekke om den ligger i map
 	// Hvis ikke opprett ny nøkkel i map med default verdi
 
-	for  
+	for
 
 }
 
