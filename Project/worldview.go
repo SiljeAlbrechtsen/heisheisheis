@@ -31,4 +31,30 @@ type MergedWorldviews struct {
 	Elevators map[ElevID]ElevState
 }
 
+lastWorldview := make(map[string]Worldview)
 
+func getHallOrdersFromWorldview(wv map[string]WorldView, id string) HallOrders {
+
+
+	return wv.hallOrders
+}
+
+func hallOrdersEqual(worldviews map[string]WorldView) bool {
+	if len(worldviews) <= 1{
+		return true	
+	}
+
+	var reference [NumFloors][NumButtons]OrderState
+	first := true
+
+	for _, wv := range worldviews {
+		if first {
+			reference = wv.hallOrders
+			first = false
+		}
+		if w.HallOrders != reference {
+			return false
+		}
+
+	return true		
+}
