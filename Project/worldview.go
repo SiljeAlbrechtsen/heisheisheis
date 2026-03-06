@@ -84,7 +84,6 @@ func syncHallOrders(latestWorldviews map[int]Worldview) HallOrders {
 						w.hallOrders[f][d] = myCurrentOrder
 					} else {
 						myHallOrders[f][d] = peerCurrentOrder
-
 					}
 				}
 			}

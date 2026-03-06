@@ -1,9 +1,162 @@
 package assignment 
 
 import (
-	"fmt"
-	// Må importere heiskode som har funksjonene chooseDirection og shouldStop
+	"encoding/json"
+	"strconv" 
 )
+// TODO: Finne ut hvordan vi skal sende det over. Det må være public, men er det dårlig praksis? Burde vi heller sende over en public kopi?
+// TODO: Nå blir id som tall. Må den endres til one, two osv eller funker det?
+// TODO: Alexsey: Elevator state? Hvordan er den? Stemmer formatet med JSON filen?
+// TODO: Eventuelt ta JSON pakking i egen modul? Hva er sammenhengen med assignment her?
+
+// Bytte navn?
+type hallRequestsInputJSON struct { 
+	HallRequests [NumFloors][Directions]bool // TODO: Bytte navn på directions til NumDirections?
+	States       map[string]stateInputJSON 
+}
+
+type stateInputJSON  struct {
+	Behaviour   string           
+	Floor       int              
+	Direction   string           
+	CabRequests [NumFloors]bool  
+}
+
+// Hjelpefunksjon
+func buildState(state StateElevator) stateInputJSON{
+	 return stateInputJSON{
+        Behaviour:   state.Behaviour,
+        Floor:       state.Floor,
+        Direction:   state.Direction,
+        CabRequests: state.MyCabOrders,
+    }
+}
+
+// Hjelpefunksjon
+func convertHallOrdersToBool(hallOrders hallOrders) [NumFloors][Directions]bool {
+	var converted [NumFloors][Directions]bool
+
+	for f := 0; f < NumFloors; f++ {
+		for d := 0; d < Directions; d++ {
+			converted[f][d] = hallOrders[f][d] == Confirmed
+		}
+	}
+	return converted
+}
+
+// Hjelpefunksjon
+func buildInputHallRequestAssigner(latestWorldviews map[int]Worldview, myID int) hallRequestsInputJSON {
+    // Hent hall requests fra egen worldview
+    hallRequests := convertHallOrdersToBool(latestWorldviews[myID].hallOrders)
+
+    states := make(map[string]stateInputJSON)
+    for id, worldview := range latestWorldviews {
+        states[strconv.Itoa(id)] = buildState(worldview.State)
+    }
+
+    return hallRequestsInputJSON{
+        HallRequests: hallRequests,
+        States:       states,
+    }
+}
+
+func convertWorldviewToJSON(latestWorldviews map[int]Worldview, myID int) ([]byte, error) {
+    input := buildInputHallRequestAssigner(latestWorldviews, myID)
+    return json.MarshalIndent(input, "", "\t")
+}
+
+
+// Jeg får inn channel med worldview. Den skal brukes til å
+
+// Lager en funksjon som skal kalle på 
+/*
+Tanke videre:
+I en annen funksjon så kan den ta inn channel og få inn worldview.
+Bruke hjelpefunksjon til å få det på JSON også bare kjøre assigner funk
+Må neste gang finne ut hvordan jeg kan faktisk bruke assigner funksjonen. 
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+func behaviourToString(behaviour Behaviour) string {
+	switch behaviour {
+	case Idle:
+		return "idle"
+	case Moving:
+		return "moving"
+	case DoorOpen:
+		return "doorOpen"
+	default:
+		return "idle"
+	}
+}
+
+
+func directionToString(dir Direction) string {
+	switch dir {
+	case Up:
+		return "up"
+	case Down:
+		return "down"
+	case Stop:
+		return "stop"
+	default:
+		return "stop"
+	}
+}
+
+
+func buildInputHallRequestAssigner(latestWorldviews map[int]Worldview) inputHallRequestsAssigner {
+	var input inputHallRequestsAssigner
+
+	input.stateInput = make(map[string]stateInputJSON)
+
+	first := true
+
+	// ID ? hvorfor bruker jeg ikke den?
+	for id, w := range latestWorldviews {
+		if first {
+			input.HallRequests = hallOrdersToBool(w.hallOrders)
+			first = false
+		}
+		idToStr := "id_" + strconv.Itoa(id)
+
+		input.stateInput[id].Behaviour = behaviourToString(w.State.Behaviour)
+		input.stateInput[id].Direction = directionToString(w.State.Direction)
+		input.stateInput[id].Floor = w.State.Floor // TODO: Alexsey Hvor ligger floor lagret?
+		input.stateInput[id].CabRequests = w.MyCabOrders
+	}
+	return input
+}
+
+
+// Funk som konverterer til json. får inn channel fra worldview.
+// kjøre den kostfunksjonen
+// channel som sender til fsm
+
+
+
+
+*/
+
+
+
+
+
+
+
 
 /*
 Input:
@@ -12,6 +165,18 @@ Elevator states
 Elevator ID (local)
 
 */
+
+
+
+// ----------------BOSS-----------------
+
+/*
+ 
+import (
+	"fmt"
+	// Må importere heiskode som har funksjonene chooseDirection og shouldStop
+)
+
 
 
 
@@ -107,3 +272,4 @@ func TimeToIdle(e Elevator) int {
 }
 
 
+*/
