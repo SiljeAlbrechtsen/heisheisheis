@@ -72,7 +72,7 @@ func syncHallOrders(latestWorldviews map[int]Worldview) HallOrders {
 	myHallOrders := latestWorldviews[0].hallOrders // TODO: MAGIC NUMBER
 
 	// Itererer gjennom hele map. TODO: itererer også gjennom seg selv
-	for _, w := range latestWorldviews {
+	for _, w := range latestWorldviews git pu{
 		//Iterere gjennom hallOrdersene
 		for f := range NumFloors {
 			for d := range Directions {
