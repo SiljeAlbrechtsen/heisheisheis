@@ -1,9 +1,23 @@
-package assignment 
+assignment
+
+package main 
+
+
 
 import (
 	"fmt"
 	// Må importere heiskode som har funksjonene chooseDirection og shouldStop
 )
+
+
+//____________________________________________________________________________________________________________________
+//---------------------- CHANNELS ------------------------------------------------------------------------------------
+//____________________________________________________________________________________________________________________
+
+
+
+
+
 
 /*
 Input:
@@ -107,3 +121,9 @@ func TimeToIdle(e Elevator) int {
 }
 
 
+/*
+Lage funksjon som pakker json fil
+exec.Command
+hraExecutable
+
+*/
