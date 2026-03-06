@@ -76,6 +76,6 @@ func markPeerDead(order Order) Order {
 	order.ownerID = peerDied
 	return order
 }
-worldview
+
 
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
