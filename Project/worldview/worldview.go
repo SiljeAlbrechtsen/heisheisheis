@@ -111,6 +111,21 @@ func sendWorldviews(latestWorldviews map[int]Worldview, ch chan<- map[int]Transf
 	ch <- copyWorldviews(latestWorldviews)
 }
 
-
-
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
+func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-chan StateElevator) Worldview {
+    wv := worldview
+    elevatorState := <-elevatorStateCh
+    wv.state = elevatorState
+    floor := elevatorState.floor
+    dir := elevatorState.dir
+
+    if wv.hallOrders[floor][dir].ownerID == wv.idElevator {
+        if wv.hallOrders[floor][dir].syncState == Confirmed {
+            wv.hallOrders[floor][dir].syncState = DeleteProposed
+        }
+    }
+    if wv.mycabOrders[floor] == true {
+        wv.mycabOrders[floor] = false
+    }
+    return wv
+}
