@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Driver-go/elevio"
 	"Network/network/bcast"
 	"Network/network/localip"
 	"Network/network/peers"
@@ -11,13 +12,18 @@ import (
 	"time"
 )
 
+
+//////// TESTING AV NETWORK PACKAGE //////////
+
+//////// TESTING AV NETWORK PACKAGE //////////
+
 // We define some custom struct to send over the network.
 // Note that all members we want to transmit must be public. Any private members
 //  will be received as zero-values.
 
 
-
 func main() {
+	elevio.Init("localhost:15657", 4)
 
 	//__________________________________________________________________
 	//----------------  SETTER UNIK ID FOR DENNE NODEN -----------------
@@ -60,8 +66,8 @@ func main() {
 	//__________________________________________________________________
 
 	// We make channels for sending and receiving our custom data types
-	heartbeatTx := make(chan Heartbeat)
-	heartbeatRx := make(chan Heartbeat)
+	heartbeatTx := make(chan int)
+	heartbeatRx := make(chan int)
 	// ... and start the transmitter/receiver pair on some port
 	// These functi
 	//  start multiple transmitters/receivers on the same port.
