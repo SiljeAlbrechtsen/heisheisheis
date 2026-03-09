@@ -91,7 +91,7 @@ func main() {
 	peerTxEnable := make(chan bool)
 	go peers.Transmitter(15647, id, peerTxEnable)
 	go peers.Receiver(15647, peerUpdateCh)
- 
+
 	//__________________________________________________________________
 	//------------- STARTER KOMMUNIKASJON MED HEARTBEATS ---------------
 	//__________________________________________________________________
@@ -153,4 +153,3 @@ func main() {
 		}
 	}
 }
- 

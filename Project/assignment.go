@@ -1,13 +1,18 @@
-package assignment 
+package assignment
 
 import (
+	"bytes"
 	"encoding/json"
-	"strconv" 
+	"os/exec"
+	"strconv"
 )
+
 // TODO: Finne ut hvordan vi skal sende det over. Det må være public, men er det dårlig praksis? Burde vi heller sende over en public kopi?
 // TODO: Nå blir id som tall. Må den endres til one, two osv eller funker det?
 // TODO: Alexsey: Elevator state? Hvordan er den? Stemmer formatet med JSON filen?
 // TODO: Eventuelt ta JSON pakking i egen modul? Hva er sammenhengen med assignment her?
+
+// TODO: Dårlig kodekvalitet å bruke myID i alle?
 
 // Bytte navn?
 type hallRequestsInputJSON struct { 
@@ -50,7 +55,7 @@ func buildInputHallRequestAssigner(latestWorldviews map[int]Worldview, myID int)
     hallRequests := convertHallOrdersToBool(latestWorldviews[myID].hallOrders)
 
     states := make(map[string]stateInputJSON)
-    for id, worldview := range latestWorldviews {
+    for id, worldview := range convertWordlviewToJSON latestWorldviews {
         states[strconv.Itoa(id)] = buildState(worldview.State)
     }
 
@@ -64,6 +69,30 @@ func convertWorldviewToJSON(latestWorldviews map[int]Worldview, myID int) ([]byt
     input := buildInputHallRequestAssigner(latestWorldviews, myID)
     return json.MarshalIndent(input, "", "\t")
 }
+
+
+func assignHallRequests(latestWorldviews map[int]Worldview, myID int) (map[string][][]bool, error) {
+	jsonInput, err := convertWorldviewToJSON(latestWorldview, myID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sende til hall request assigner og få svar
+	cmd := exec.Command("./hall_request_assigner")
+	cmd.Stdin = bytes.NewReader(jsonInput)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	// Pakke ut JSON. Evt i annen funk?
+	var result map[string][][]bool
+	err = json.Unmarshal(output, &result)
+
+	return result, nil 
+}
+
+// Etterpå, lage en testfunksjon som tester assignment også fikse channels og fikse sånn at worldview sender en kopi av worldview inn
 
 
 // Jeg får inn channel med worldview. Den skal brukes til å
