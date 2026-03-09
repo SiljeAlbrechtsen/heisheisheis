@@ -55,8 +55,8 @@ func main() {
 	// We can disable/enable the transmitter after it has been started.
 	// This could be used to signal that we are somehow "unavailable".
 	peerTxEnable := make(chan bool)
-	go peers.Transmitter(15647, id, peerTxEnable)
-	go peers.Receiver(15647, peerUpdateCh)
+	go peers.Transmitter(10001, id, peerTxEnable)
+	go peers.Receiver(10001, peerUpdateCh)
 
 	//__________________________________________________________________
 	//------------- STARTER KOMMUNIKASJON MED HEARTBEATS ---------------
@@ -68,8 +68,8 @@ func main() {
 	// ... and start the transmitter/receiver pair on some port
 	// These functi
 	//  start multiple transmitters/receivers on the same port.
-	go bcast.Transmitter(16569, heartbeatTx)
-	go bcast.Receiver(16569, heartbeatRx)
+	go bcast.Transmitter(10002, heartbeatTx)
+	go bcast.Receiver(10002, heartbeatRx)
 
 	//__________________________________________________________________
 	//----------- SENDER DENNE NODEN SINE HEARTBEATS PERIODISK ---------
@@ -84,7 +84,6 @@ func main() {
 	// The example message. We just send one of these every second.
 	go func() {
 		HeartbeatMsg := <-floorCh
-
 
 		for {
 			select {
@@ -113,7 +112,7 @@ func main() {
 			fmt.Printf("  Lost:     %q\n", p.Lost)
 
 		case a := <-heartbeatRx:
-			fmt.Printf("Received: %#v\n", a)
+			fmt.Printf("Received from %q: %#v\n", id, a)
 		}
 	}
 }
