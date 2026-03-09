@@ -65,7 +65,7 @@ type TransferWorldview struct {
 	MycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
 }
 
-func copyWorldview(worldview worldview) TransferWorldview {
+func copyWorldview(worldview Worldview) TransferWorldview {
 	return TransferWorldview{
 		IdElevator:   worldview.idElevator,
 		HallOrders:   worldview.hallOrders,
@@ -79,17 +79,31 @@ func copyWorldview(worldview worldview) TransferWorldview {
 func copyWorldviews(latestWorldviews map[int]Worldview) map[int]TransferLatestWorldviews {
     copied := make(map[int]TransferLatestWorldviews, len(latestWorldviews))
     for id, worldview := range latestWorldviews {
-        copied[id] = worldview.copyWorldview()
+        copied[id] = worldview.copyWorldview(worldview)
     }
     return copied
 }
 
-func sendWorldviews(latestWorldviews map[int]Worldview, ch chan<- map[int]TransferWorldview)  {
-	ch <- copyWorldviews(latestWorldviews)
+
+func sendWorldviewsToAssigner(latestWorldviews map[int]Worldview, updatedWorldviewToAssignerCh chan<- map[int]TransferWorldview)  {
+	updatedWorldviewToAssignerCh<- copyWorldviews(latestWorldviews)
 }
 
+func sendWorldviewsToNetwork(latestWorldviews map[int]Worldview, updatedWorldviewToNetworkCh chan<- map[int]TransferWorldview)  {
+	updatedWorldviewToNetworkCh <- copyWorldviews(latestWorldviews)
+}
 
+func sendHallRequestsToSync(worldview WorldView, )
+/*
+TODO:
+Skrive GO-routines for assigner, worldview, sync
+Finne ut hvordan håndtere data som kommer fra FSM
+Finne ut hvordan håndtere data som kommer fra Network
+Finne ut hvordan man kan ha network alene. Altså at den ikke er main
+Finne ut hvordan vi trigger 
+Finne ut hvordan vi gjør det når vi bare skal ha en worldview. Evt sette myID som en global const variabel som vi bruker som indeks.
 
+*/
 
 /*
 
