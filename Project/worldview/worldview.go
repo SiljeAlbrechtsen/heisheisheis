@@ -1,5 +1,32 @@
 package worldview
 
+/*
+TODO:
+Skrive GO-routines for assigner, worldview, sync
+Finne ut hvordan håndtere data som kommer fra FSM - Ingrid
+Finne ut hvordan håndtere data som kommer fra Network
+- Når peer dør.
+- Når vi får inn heartbeat. 
+Finne ut hvordan man kan ha network alene. Altså at den ikke er main. Go-routine
+// Finne ut hvordan vi gjør det når vi bare skal ha en worldview. Evt sette myID som en global const variabel som vi bruker som indeks.
+// Når vi starter programmet må vi legge inn vår worldview som ID_0 elns
+Være sikker på: håndterer vi button light contract? Når lys skrus på, er alle enige?
+Go-routine for sync kjøres hver gang den får inn noe på channel
+Samme med worldview
+
+Testing:
+Finne ut hva vi burde teste og hvordan?
+
+EnkelHeisLogikk: (Alexsey)
+Modularisere koden og strukturere. Forslag: elevator – selve heistilstanden (etasje, retning, dør åpen/lukket, motor). controller / fsm – logikken som bestemmer hva heisen skal gjøre basert på tilstand og bestillinger.
+Forstå den
+Sende ElevatorState til Worldview Channel elevatorStateCh
+Motta matrise fra assigner via channel AssignedRequestsCh
+Finne ut hva den skal gjøre med matrisen. Hvordan heisen blir styrt av denne matrisen?
+Skrive Go-routines. minst en for FSM og en for driver?
+Være sikker på: håndterer vi button light contract?
+*/
+
 //______________________________________________________________________________________________________
 //----------------  Structs ----------------------------------------------------------------------------
 //______________________________________________________________________________________________________
@@ -107,8 +134,11 @@ func copyWorldviews(latestWorldviews map[int]Worldview) map[int]TransferLatestWo
     return copied
 }
 
-func sendWorldviews(latestWorldviews map[int]Worldview, ch chan<- map[int]TransferWorldview)  {
-	ch <- copyWorldviews(latestWorldviews)
+// La de inn i samme funksjon siden de skal kjøres samtidig. 
+func sendWorldviewsToOtherModules(latestWorldviews map[int]Worldview, ch chan<- map[int]TransferWorldview, , updatedWorldviewToNetworkCh chan<- map[int]TransferWorldview, updatedWorldviewToAssignerCh chan<- map[int]TransferWorldview, updatedWorldviewToSyncCh chan<- map[int]TransferWorldview)  {
+	updatedWorldviewToNetworkCh <- copyWorldviews(latestWorldviews)
+	updatedWorldviewToAssignerCh <- copyWorldviews(latestWorldviews)
+	updatedWorldviewToSyncCh <- copyWorldviews(latestWorldview)
 }
 
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
@@ -129,3 +159,4 @@ func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-cha
     }
     return wv
 }
+
