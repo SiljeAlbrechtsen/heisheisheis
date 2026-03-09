@@ -52,83 +52,55 @@ type Worldview struct {
 //----------------  FUNKSJONER FOR Å HÅNDTERE WORLDVIEW -------------------------------------------------------
 //____________________________________________________________________________________________________________
 
-func nextOrderState(currentOrder Order) orderSyncState {
-	switch currentOrder.OrderSyncState {
-	case None:
-		return Unconfirmed
-	case Unconfirmed:
-		return Confirmed
-	case Confirmed:
-		return DeleteProposed
-	case DeleteProposed:
-		return None
-	default:
-		return None
+
+
+//___________________________________________________________________________
+//------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
+//___________________________________________________________________________
+
+type TransferWorldview struct {
+	IdElevator  int
+	HallOrders  HallOrders
+	State       StateElevator   // TODO: Må hente type fra fsm
+	MycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
+}
+
+func copyWorldview(worldview worldview) TransferWorldview {
+	return TransferWorldview{
+		IdElevator:   worldview.idElevator,
+		HallOrders:   worldview.hallOrders,
+		State:        worldview.state,
+		MycabOrders:  worldview.mycabOrders,
 	}
 }
 
-// Trigges når vi får inn nye worldviews
-func syncHallOrders(latestWorldviews map[int]Worldview) HallOrders {
-	myHallOrders := latestWorldviews[0].hallOrders // TODO: MAGIC NUMBER
-
-	// Itererer gjennom hele map. TODO: itererer også gjennom seg selv
-	for _, w := range latestWorldviews git pu{
-		//Iterere gjennom hallOrdersene
-		for f := range NumFloors {
-			for d := range Directions {
-				//
-				myCurrentOrder := myHallOrders[f][d]
-				peerCurrentOrder := w.hallOrders[f][d]
-				if nextOrderState(myCurrentOrder) == peerCurrentOrder.orderSyncState {
-					if myCurrentOrder.ownerID == peerDied {
-						w.hallOrders[f][d] = myCurrentOrder
-					} else {
-						myHallOrders[f][d] = peerCurrentOrder
-					}
-				}
-			}
-		}
-	}
-
-	// latestWorldviews[0].hallOrders = myHallOrders
-	return myHallOrders // TODO Må ha med linjen over et annet sted
+// TODO: Er det bedre praksis å lage mappet lokalt i funksjonen eller globalt?
+// Kopierer worldview inn i nytt map som skal sendes til andre moduler
+func copyWorldviews(latestWorldviews map[int]Worldview) map[int]TransferLatestWorldviews {
+    copied := make(map[int]TransferLatestWorldviews, len(latestWorldviews))
+    for id, worldview := range latestWorldviews {
+        copied[id] = worldview.copyWorldview()
+    }
+    return copied
 }
+
+func sendWorldviews(latestWorldviews map[int]Worldview, ch chan<- map[int]TransferWorldview)  {
+	ch <- copyWorldviews(latestWorldviews)
+}
+
+
+
 
 /*
-if heisA.nextorder == heisB.stateorder
-	if heisA.ownerID.peerDied
-		blir heisB.stateorder == heisA.state
-	else
-		blir heisA.stateorder == heisB.stateOrder
-Funk skal:
-Sammenligne SyncOrder
-- HVis de er like return
-- Hvis ikke:
-	- Må sjekke ownerID + sync
-	- Først sjekke state så ID pga
-
-	- Hvis i none + unconfirmed = u
-
-Må loope gjennom alle aktive heiser sine hall orders
-Det må være dobbel løkke siden det er en matrise
-
-Vi må sette våres heis til første, så skal alle andre sine hallorders sammenlignes med denne
-
-for gjennom hele map
-
-
-Det holder hvis alle skal frem i tid
-Tilfellet det ikke er riktig er hvis owner ID = peerDied. Da er det motsatt
-*/
 
 func EqualHallOrders(worldviews map[string]WorldView) bool {
 	if len(worldviews) <= 1 {
 		return true
 	}
-
+	
 	var reference [NumFloors][NumButtons]OrderState
 	first := true
-
+	
 	for _, w := range worldviews { // for key, value TODO: Bytte w med noe annet
 		if first {
 			reference = w.hallOrders
@@ -143,22 +115,22 @@ func EqualHallOrders(worldviews map[string]WorldView) bool {
 
 func MergeHallOrders(worldview map[string]WorldView) HallOrders {
 	// Case 1: Alle worldviews har like hallorders, returner disse
-
+	
 	// Case 2:
 	/*
-			Må iterere gjennom map.
-			Må så iterere gjennom hver hall order
-			case
-			hvis
-
-		?????????????
-	*/
-
+	Må iterere gjennom map.
+	Må så iterere gjennom hver hall order
+	case
+	hvis
+	
+	?????????????
+	
+	
 }
 
 func addMergedHallOrdersToWorldview(worldview map[string]WorldView, mergedHallOrders HallOrders) map[string]WorldView {
-
-}
+	
+}*/
 
 // TODO
 // funksjon for å sette state fra confirmet til uncondiremd og ownerID til peerDied når heis dør

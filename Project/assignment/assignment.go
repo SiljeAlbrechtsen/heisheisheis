@@ -1,4 +1,12 @@
+<<<<<<< HEAD:Project/assignment.go
 package assignment
+=======
+assignment
+
+package main 
+
+
+>>>>>>> origin/main:Project/assignment/assignment.go
 
 import (
 	"bytes"
@@ -7,6 +15,7 @@ import (
 	"strconv"
 )
 
+<<<<<<< HEAD:Project/assignment.go
 // TODO: Finne ut hvordan vi skal sende det over. Det må være public, men er det dårlig praksis? Burde vi heller sende over en public kopi?
 // TODO: Nå blir id som tall. Må den endres til one, two osv eller funker det?
 // TODO: Alexsey: Elevator state? Hvordan er den? Stemmer formatet med JSON filen?
@@ -181,6 +190,12 @@ func buildInputHallRequestAssigner(latestWorldviews map[int]Worldview) inputHall
 */
 
 
+=======
+
+//____________________________________________________________________________________________________________________
+//---------------------- CHANNELS ------------------------------------------------------------------------------------
+//____________________________________________________________________________________________________________________
+>>>>>>> origin/main:Project/assignment/assignment.go
 
 
 
@@ -301,4 +316,13 @@ func TimeToIdle(e Elevator) int {
 }
 
 
+<<<<<<< HEAD:Project/assignment.go
 */
+=======
+/*
+Lage funksjon som pakker json fil
+exec.Command
+hraExecutable
+
+*/
+>>>>>>> origin/main:Project/assignment/assignment.go
