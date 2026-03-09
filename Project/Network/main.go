@@ -5,13 +5,11 @@ import (
 	"Network/network/bcast"
 	"Network/network/localip"
 	"Network/network/peers"
-	"../worldview/worldview"
 	"flag"
 	"fmt"
 	"os"
 	"time"
 )
-
 
 //////// TESTING AV NETWORK PACKAGE //////////
 
@@ -20,7 +18,6 @@ import (
 // We define some custom struct to send over the network.
 // Note that all members we want to transmit must be public. Any private members
 //  will be received as zero-values.
-
 
 func main() {
 	elevio.Init("localhost:15657", 4)
@@ -74,30 +71,33 @@ func main() {
 	go bcast.Transmitter(16569, heartbeatTx)
 	go bcast.Receiver(16569, heartbeatRx)
 
-
 	//__________________________________________________________________
 	//----------- SENDER DENNE NODEN SINE HEARTBEATS PERIODISK ---------
 	//__________________________________________________________________
 
-	worldviewCh := make(chan Worldview)
+	//worldviewCh := make(chan Worldview)
+
+	floorCh := make(chan int)
+
+	go elevio.PollFloorSensor(floorCh)
 
 	// The example message. We just send one of these every second.
 	go func() {
-		HeartbeatMsg := <- worldviewCh
+		HeartbeatMsg := <-floorCh
+
 
 		for {
 			select {
-			
 			// Hvis worldview endres
-			case newWorldview := <- worldviewCh:
-				HeartbeatMsg = newWorldview
-
+			case newMsg := <-floorCh:
+				HeartbeatMsg = newMsg
 
 			// sender worldview etter 1 sek
-			case <- time.After(1*time.Second):
-			heartbeatTx <- worldviewCh
+			case <-time.After(1 * time.Second):
+				heartbeatTx <- HeartbeatMsg
+			}
 		}
-	}
+	}()
 
 	//__________________________________________________________________
 	//----------------  PRINTER INFORMASJON ----------------------------
