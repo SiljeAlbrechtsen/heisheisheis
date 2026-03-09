@@ -4,6 +4,7 @@ import (
 	"Network/network/bcast"
 	"Network/network/localip"
 	"Network/network/peers"
+	"../worldview/worldview"
 	"flag"
 	"fmt"
 	"os"
@@ -72,14 +73,25 @@ func main() {
 	//----------- SENDER DENNE NODEN SINE HEARTBEATS PERIODISK ---------
 	//__________________________________________________________________
 
+	worldviewCh := make(chan Worldview)
+
 	// The example message. We just send one of these every second.
 	go func() {
-		HeartbeatMsg := 
+		HeartbeatMsg := <- worldviewCh
+
 		for {
-			heartbeatTx <- HeartbeatMsg
-			time.Sleep(1 * time.Second) //Endre til ønsket frekvens
+			select {
+			
+			// Hvis worldview endres
+			case newWorldview := <- worldviewCh:
+				HeartbeatMsg = newWorldview
+
+
+			// sender worldview etter 1 sek
+			case <- time.After(1*time.Second):
+			heartbeatTx <- worldviewCh
 		}
-	}()
+	}
 
 	//__________________________________________________________________
 	//----------------  PRINTER INFORMASJON ----------------------------
@@ -95,7 +107,7 @@ func main() {
 			fmt.Printf("  Lost:     %q\n", p.Lost)
 
 		case a := <-heartbeatRx:
-			fmt.Printf("Received: %#v\n", a.SenderID)
+			fmt.Printf("Received: %#v\n", a)
 		}
 	}
 }
