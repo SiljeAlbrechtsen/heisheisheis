@@ -72,7 +72,6 @@ func main() {
 	//----------- SENDER DENNE NODEN SINE HEARTBEATS PERIODISK ---------
 	//__________________________________________________________________
 
-	buttonPressedCh :=
 	// The example message. We just send one of these every second.
 	go func() {
 		HeartbeatMsg := 
