@@ -158,3 +158,6 @@ func elevator_behaviorToString(b Behaviour) string {
 	}
 }
 
+func sendElevatortilWV(chan enKanal){
+	// sende Elevator på enKanal
+}

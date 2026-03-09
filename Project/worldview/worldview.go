@@ -77,5 +77,40 @@ func markPeerDead(order Order) Order {
 	return order
 }
 
+//___________________________________________________________________________
+//------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
+//___________________________________________________________________________
+
+type TransferWorldview struct {
+	IdElevator  int
+	HallOrders  HallOrders
+	State       StateElevator   // TODO: Må hente type fra fsm
+	MycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
+}
+
+func copyWorldview(worldview Worldview) TransferWorldview {
+	return TransferWorldview{
+		IdElevator:   worldview.idElevator,
+		HallOrders:   worldview.hallOrders,
+		State:        worldview.state,
+		MycabOrders:  worldview.mycabOrders,
+	}
+}
+
+// TODO: Er det bedre praksis å lage mappet lokalt i funksjonen eller globalt?
+// Kopierer worldview inn i nytt map som skal sendes til andre moduler
+func copyWorldviews(latestWorldviews map[int]Worldview) map[int]TransferLatestWorldviews {
+    copied := make(map[int]TransferLatestWorldviews, len(latestWorldviews))
+    for id, worldview := range latestWorldviews {
+        copied[id] = worldview.copyWorldview()
+    }
+    return copied
+}
+
+func sendWorldviews(latestWorldviews map[int]Worldview, ch chan<- map[int]TransferWorldview)  {
+	ch <- copyWorldviews(latestWorldviews)
+}
+
+
 
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
