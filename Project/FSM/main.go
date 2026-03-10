@@ -18,7 +18,7 @@ func main() {
 		{true, false, false},
 	}
 
-	ClearFloorRequest(elevatorState.requests, &elevatorState)
+	//ClearFloorRequest(elevatorState.requests, &elevatorState)
 
 	PrintElevatorState(elevatorState)
 

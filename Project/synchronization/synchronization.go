@@ -5,9 +5,9 @@ package synchronization
 // ---------------- CHANNELS-----------------------------------------------------------------------------------
 // ____________________________________________________________________________________________________________
 
-// Inn channel: worldview-map
+// Inn channel: worldview-map            worldviewToSyncCh
 
-// Ut channel: sende ut hallOrders
+// Ut channel: sende ut hallOrders.      syncToWorldviewCh
 
 //____________________________________________________________________________________________________________
 //----------------  FUNKSJONER FOR Å HÅNDTERE WORLDVIEW ------------------------------------------------------
@@ -29,7 +29,7 @@ func nextOrderState(currentSyncState orderSyncState) orderSyncState {
 }
 
 // Trigges når vi får inn nye worldviews
-func syncHallOrders(latestWorldviews map[int]Worldview) HallOrders {
+func syncHallOrders(latestWorldviews map[int]Worldview) hallOrders {
 	var myHallOrders HallOrders
 
 	for _, peer := latestWorldviews {
@@ -61,5 +61,22 @@ func syncHallOrders(latestWorldviews map[int]Worldview) HallOrders {
 		}
 	}
 	return myHallOrders
-	// TODO: må brukes for å oppdatere worldview. 
 }
+
+
+// _______________________________________________________
+// ---------------GO ROUTINE MED CHANNELS-----------------
+// _______________________________________________________
+
+func goRoutineSync(
+	latestWorldviews map[int]Worldview, 
+	syncToWorldviewCh chan<- HallOrders,
+	worldviewToSyncCh <-chan map[int]Worldview) 
+	{
+	for {
+		latestWorldviews := <-worldviewToSyncCh
+		syncedHallOrders := syncHallOrders(latestWorldview)
+		syncToWorldviewCh <- syncedHallOrders
+	}
+}
+

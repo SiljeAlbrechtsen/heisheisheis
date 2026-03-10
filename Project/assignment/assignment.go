@@ -65,6 +65,7 @@ func convertWorldviewToJSON(latestWorldviews map[int]Worldview, MyID int) ([]byt
     return json.MarshalIndent(input, "", "\t")
 }
 
+// TODO: Ligger hall_request_assigner i riktig mappe?
 // Eller bare assignRequests, siden den sier noe om caborders også?
 func assignHallRequests(latestWorldviews map[int]Worldview, MyID int) (map[string][][]bool, error) {
 	jsonInput, err := convertWorldviewToJSON(latestWorldview, MyID)
@@ -88,8 +89,28 @@ func assignHallRequests(latestWorldviews map[int]Worldview, MyID int) (map[strin
 }
 
 
-// TODO: LEGG INN CHANNEL I MAIN
-// GO routinefmt.Println(currentFloor)
+// GO routine
+func RunHallRequestAssigner(
+	myID int, 
+	worldviewToAssignerCh <-chan map[int]Worldview, 
+	assignerToFsmCh chan<- [][]bool) 
+	{
+    for {
+        latestWorldviews := <- worldviewToAssignerCh
+        result, err := assignHallRequests(latestWorldviews, MyID)
+        if err != nil {
+            continue
+        }
+        assignerToFsmCh <- result[strconv.Itoa(MyID)]
+    }
+}
+
+
+
+/*
+
+GO ROUTINE MED TICKER
+
 func runHallRequestAssignerEvery10ms(MyID int, in <-chan map[int]Worldview, out chan<- [][]bool) {
 	ticker := time.NewTicker(10 * time.Millisecond)
     defer ticker.Stop()
@@ -113,21 +134,4 @@ func runHallRequestAssignerEvery10ms(MyID int, in <-chan map[int]Worldview, out 
 		}
 	}
 }
-
-
-fmt.Println(currentFloor)
-// Trenger egt ikke disse to funksjonene nå, det er implementert i runHallRequestAssignerEvery10ms
-func receiveWorldviews(updatedWorldviewToAssignerCh <-chan map[int]Worldview) map[int]Worldview {
-	receivedWorldviews := <-updatedWorldviewToAssignerCh
-	return receivedWorldviews
-}
-
-func sendAssignedRequests(AssignedRequestsCh chan<- map[string][][]bool) {
-	result, err = assignHallRequests(latestfmt.Println(currentFloor)Worldviews, MyID)
-	if err != nil {
-        // TODO: logg eller håndter feilen?fmt.Println(currentFloor) Eller bare håndtere feilen?
-        return
-    }
-    ch <- result[strconv.Itoa(MyID)]
-}
-
+*/
