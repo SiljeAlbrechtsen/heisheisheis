@@ -35,6 +35,10 @@ Være sikker på: håndterer vi button light contract? Når lys skrus på, er al
 Go-routine for sync kjøres hver gang den får inn noe på channel
 Samme med worldview
 Ligger hall_request_assigner i riktig mappe?
+Dobbeltsjekk go rutne for assigner, trenger den ticker?
+
+- Lage funksjoner av network-main som kan kjøres i hoved-main
+- Lage funksjon som sjekker om id fra terminal finnes fra før
 
 Testing:
 Finne ut hva vi burde teste og hvordan?
@@ -98,7 +102,7 @@ type Worldview struct {
 //}
 
 //____________________________________________________________________________________________________________________
-//---------------------- CHANNELS ------------------------------------------------------------------------------------
+//---------------------- CHANNELS -------------------------------	updatedWorldviewToNetworkCh <- copyWorldviews(latestWorldviews)-----------------------------------------------------
 //____________________________________________________________________________________________________________________
 
 
