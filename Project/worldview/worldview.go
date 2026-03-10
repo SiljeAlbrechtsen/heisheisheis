@@ -115,45 +115,6 @@ Ut: rå worldview-map til sync
 
 
 
-//___________________________________________________________________________
-//------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
-//___________________________________________________________________________
-
-type hallOrdersPublic [NumFloors][Directions]Order
-
-type TransferWorldview struct {
-	IdElevator  int
-	HallOrders  HallOrders
-	State       StateElevator   // TODO: Må hente type fra fsm
-	MycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
-}
-
-func copyWorldview(worldview Worldview) TransferWorldview {
-	return TransferWorldview{
-		IdElevator:   worldview.idElevator,
-		HallOrders:   worldview.hallOrders,
-		State:        worldview.state,
-		MycabOrders:  worldview.mycabOrders,
-	}
-}
-
-// TODO: Er det bedre praksis å lage mappet lokalt i funksjonen eller globalt?
-// Kopierer worldview inn i nytt map som skal sendes til andre moduler
-func copyWorldviews(latestWorldviews map[int]Worldview) map[int]TransferLatestWorldviews {
-    copied := make(map[int]TransferLatestWorldviews, len(latestWorldviews))
-    for id, worldview := range latestWorldviews {
-        copied[id] = worldview.copyWorldview()
-    }
-    return copied
-}
-
-// Siden network opererer med string key, må jeg også ha en funksjon for det. Den returnerer også bare vårt worldview
-// Ikke bra cohesion?
-func copyOneWorldviewStringKey(latestWorldviews map[int]Worldview, myID int) map[string]TransferLatestWorldviews {
-    copied := make(map[string]TransferLatestWorldviews, 1)
-    copied[strconv.Itoa(myID)] = latestWorldviews[myID].copyWorldview()
-    return copied
-}
 
 // La de inn i samme funksjon siden de skal kjøres samtidig. Skal kjøres når worldview oppdateres
 func sendWorldviewsToOtherModules(
@@ -243,6 +204,8 @@ func GoroutineForWorldview(
 	worldviewToSyncCh       chan<- map[int]Worldview
 	worldviewToNetworkCh    chan<- map[string]TransferWorldview) 
 	{ 
+
+	
 	worldviewsMap := make(map[int]Worldview)
 
 	for {
@@ -273,40 +236,45 @@ func GoroutineForWorldview(
 		// Må kjøre en funksjon
 		// peerdead funksjonen må kjøres her et sted. 
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
+	} 
+}
+
+//___________________________________________________________________________
+//------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
+//___________________________________________________________________________
+
+type hallOrdersPublic [NumFloors][Directions]Order
+
+type TransferWorldview struct {
+	IdElevator  int
+	HallOrders  HallOrders
+	State       StateElevator   // TODO: Må hente type fra fsm
+	MycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
+}
+
+func copyWorldview(worldview Worldview) TransferWorldview {
+	return TransferWorldview{
+		IdElevator:   worldview.idElevator,
+		HallOrders:   worldview.hallOrders,
+		State:        worldview.state,
+		MycabOrders:  worldview.mycabOrders,
 	}
-	/*
-	for {}
-		select
-	case: får inne noe fra heis
-		kjører updateworldviewwithelevatorstate
-		sender worldviews til andre moduler
-	case: får inn noe fra network
-		kjører network sin funksjon som jeg skal lage nå
-		sender worldviews til andre moduler
-	case: får inn noe fra sync
-		skal kjøre sync funksjon som jeg skal lage nå
-		sender worldviews til andre moduler
-	case: peer død/ levende
-		finn ut hva som skjer
-	*/
+}
 
-
-	//typ: 
-	latestWorldviews := make(map[int]Worldview)
-
-    for {
-        select {
-        case elevator := <-fromElevatorCh:
-            updateWorldviewWithElevatorState(latestWorldviews, elevator)
-            sendWorldviewsToOtherModules(latestWorldviews, ...)
-
-        case data := <-fromNetworkCh:
-            updateWorldviewFromNetwork(latestWorldviews, data)
-            sendWorldviewsToOtherModules(latestWorldviews, ...)
-
-        case orders := <-fromSyncCh:
-            updateWorldviewFromSync(latestWorldviews, orders)
-            sendWorldviewsToOtherModules(latestWorldviews, ...)
-        }
+// TODO: Er det bedre praksis å lage mappet lokalt i funksjonen eller globalt?
+// Kopierer worldview inn i nytt map som skal sendes til andre moduler
+func copyWorldviews(latestWorldviews map[int]Worldview) map[int]TransferLatestWorldviews {
+    copied := make(map[int]TransferLatestWorldviews, len(latestWorldviews))
+    for id, worldview := range latestWorldviews {
+        copied[id] = worldview.copyWorldview()
     }
+    return copied
+}
+
+// Siden network opererer med string key, må jeg også ha en funksjon for det. Den returnerer også bare vårt worldview
+// Ikke bra cohesion?
+func copyOneWorldviewStringKey(latestWorldviews map[int]Worldview, myID int) map[string]TransferLatestWorldviews {
+    copied := make(map[string]TransferLatestWorldviews, 1)
+    copied[strconv.Itoa(myID)] = latestWorldviews[myID].copyWorldview()
+    return copied
 }

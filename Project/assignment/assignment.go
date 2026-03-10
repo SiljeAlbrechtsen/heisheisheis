@@ -88,9 +88,8 @@ func assignHallRequests(latestWorldviews map[int]Worldview, MyID int) (map[strin
 }
 
 
-// TODO: LEGG INN CHANNEL I MAIN
 // GO routine
-func runHallRequestAssigner(
+func RunHallRequestAssigner(
 	myID int, 
 	worldviewToAssignerCh <-chan map[int]Worldview, 
 	assignerToFsmCh chan<- [][]bool) 
