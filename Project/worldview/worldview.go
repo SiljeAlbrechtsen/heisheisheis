@@ -280,3 +280,25 @@ func SetNodeDead(latestWorldviews map[int]Worldview, id string){
 		}
 	}
 }
+
+func addNewCabOrder(wordview Worldview, cabButtonCh chan int) {
+	wv := worldview
+	cabBtn := <- cabButtonCh
+
+	wv.cabOrders[cabBtn] = true
+}
+
+func addNewHallOrder(wordview, hallButtonCh chan [2]int) {
+	wv := worldview
+	hallBtn := <- hallButtonCh
+
+	floor := hallBtn[0]
+	dir := hallbtn[1]
+
+	order := wv.hallOrders[floor][dir]
+
+	order.syncState = Unconfirmed
+	order.ownerID = noOwner
+
+}
+
