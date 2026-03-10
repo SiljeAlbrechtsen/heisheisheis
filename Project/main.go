@@ -1,66 +1,67 @@
 package main
 
-const (
-	MyID    int
+import (
+	"Project/Network/setup"
+	//"flag"
+	"fmt"
+	//"os"
+	//"time"
 )
 
-
-
 func main() {
-	//__________________________________________________________
-	//-------------------Channels-------------------------------
-	//__________________________________________________________
 
-	// Assignment
+	//__________________________________________________________________
+	//----------------  SETTER UNIK ID FOR DENNE NODEN -----------------
+	//__________________________________________________________________
 
+	// `go run main.go -id=our_id`
+	id := setup.GetNodeID()
 
-	// FSM
+	//__________________________________________________________________
+	//---------------------- PEER DISCOVERY ----------------------------
+	//__________________________________________________________________
 
-	// NETWORK
+	peerUpdateCh := setup.StartPeerDiscovery(id)
 
-	// Kanal for å motta id til peers som er på nett
-	peerUpdateCh := make(chan peers.PeerUpdate)
-	//Disable/enable transmitter etter den har startet, kan brukes til å signalisere at vi er utilgjengelig
-	peerTxEnable := make(chan bool)  // Unødvendig??
-	//Sende vår worldview
-	worldviewTx := make(chan wordlview.WorldView)
-	//Motta andre worldviews
-	worldviewRx := make(chan wordlview.WorldView)
+	//__________________________________________________________________
+	//------------- STARTER KOMMUNIKASJON MED HEARTBEATS ---------------
+	//__________________________________________________________________
 
-	// Synchronization
-	syncedHallOrdersCh := make(chan worldview.HallOrders)
+	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
 
-	// Worldview
-	latesWorldviewsCh := make(chan worldView.map[string]Worldview)
+	//__________________________________________________________________
+	//----------- SENDER DENNE NODEN SINE HEARTBEATS PERIODISK ---------
+	//__________________________________________________________________
 
-	//___________________________________________________________
-	//------------------ go rutines -----------------------------
-	//___________________________________________________________
+	worldviewToNetworkCh := make(chan setup.Worldview)
 
-	/*
-	- Transmitte wv
-	- Recieve wv
-		- addPeerToMap
-		- updateLatesWordviews
-	- synce
-	- assigne
-	- fsm
-	*/
-
-}
+	go setup.TransmittiWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
 
 
+	// gorutine som sender fra vårt worldview, erdig formatert, fra worldview til nettverk
+	//go elevio.PollFloorSensor(floorCh)
 
+	// The example message. We just send one of these every second.
 
+	//__________________________________________________________________
+	//----------------  PRINTER INFORMASJON ----------------------------
+	//__________________________________________________________________
 
+	fmt.Println("Started")
+	for {
+		select {
+		case p := <-peerUpdateCh:
+			fmt.Printf("Peer update:\n")
+			fmt.Printf("  Peers:    %q\n", p.Peers)
+			fmt.Printf("  New:      %q\n", p.New)
+			fmt.Printf("  Lost:     %q\n", p.Lost)
 
-
-
-
-
-
-
-
-
+		case a := <-worldviewRx:
+			fmt.Printf("Received from %q: %#v\n", id, a)
+			//TODO
+			// sende mottat wv til worldview, updateWorldview
+		}
+	}
+	
 }
 

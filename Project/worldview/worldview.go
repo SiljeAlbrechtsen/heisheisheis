@@ -166,8 +166,6 @@ func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-cha
     return wv
 }
 
-// Sender wv-map til sync
 
-// Sender vw 
 
 func 
