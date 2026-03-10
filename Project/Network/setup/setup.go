@@ -38,8 +38,8 @@ func TransmitWorldviewPeriodically(worldviewTx chan<- Worldview, worldviewToNetw
 // Tar inn worldviewen vi mottar på Rx og setter den på kanalen som sender til worldview
 func ForwardWorldviewFromNetwork(worldviewRx <-chan Worldview, networkToWorldviewCh chan<- Worldview) {
 	for {
-		w := <-worldviewRx
-		networkToWorldviewCh <- w
+		wv := <-worldviewRx
+		networkToWorldviewCh <- wv
 	}
 }
 

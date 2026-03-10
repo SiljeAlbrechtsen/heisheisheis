@@ -1,23 +1,12 @@
 package worldview
 
 /*
-Fullført:
-Nå sender worldview til network, assigner og sync. 
-Laget sync motta funksjon
-laget sync sende funk i sync modul
-laget go-routine i sync
-Fikse goroutine i assigner
-- fikse goroutine i worldview
+TODO
 
-Silje: liste på todo
-- få med alle endringer fra elevator
-- LEGG INN CHANNEL I MAIN
+Finne ut hvor disse funk skal stå. Sync?
+-Sjekke om alle har en ordre som er på proposedDeleted -> Da skal den settes til No Order og No Owner og skru av lys via channel til FSM
+-Må ha en funksjon som sjekker om alle har unconfirmed order -> Da skal den gjøre om til confirmed. Lys skal skru på via channel til FSM
 
-
-- hva som skjer når en peer dør
-- lage nettwork motta funk (ingrig)
-
-TODO: Ordne sånn at alle channels har samme navn
 */
 
 
@@ -87,8 +76,6 @@ func sendWorldviewsToOtherModules(
 // ----------FUNKSJONER FOR Å TA IMOT OG HÅNDTERE DATA FRA ANDRE MODULER--------
 // _____________________________________________________________________________
 
-// Vi får inn data fra sync og network
-
 // SYNC sin func
 func updateWorldviewFromSync(latestWorldviews map[int]Worldview, orders hallOrders, myID int) {
 	latestWorldviews[myID].hallOrders = orders
@@ -144,6 +131,89 @@ func updateWorldviewWithElevatorState(worldview Worldview, elevatorToWorldviewCh
     return wv
 }
 
+
+/*
+Finne ut hvor disse funk skal stå. Sync?
+-Sjekke om alle har en ordre som er på proposedDeleted -> Da skal den settes til No Order og No Owner og skru av lys via channel til FSM
+-Må ha en funksjon som sjekker om alle har unconfirmed order -> Da skal den gjøre om til confirmed. Lys skal skru på via channel til FSM
+*/
+
+// Denne itererer gjennom alle hall orders og sjekker. Klarer ikke å tenke om det er nødvendig atm
+func confirmIfAllAgree(worldviewsMap map[int]Worldview, myID int) (HallOrders, bool) {
+	myOrders := worldviewsMap[myID].hallOrders
+	changed := false
+
+	// Itererer gjennom hall orders til vår heis
+    for f := 0; f < NumFloors; f++ {
+        for d := 0; d < Directions; d++ {
+            order := myOrders[f][d]
+
+			// Sjekker om vi har noen orders som er unconfirmed
+            if order.syncState != Unconfirmed {
+                continue
+            }
+
+			// Antar først at alle er enige. Hvis noen andre har ordersyncstate til None så settes den til false
+			// Må den gjelde noen andre enn false?
+            allAgree := true
+            for _, peer := range worldviewsMap {
+                peerState := peer.hallOrders[f][d].syncState
+                if peerState == None {
+                    allAgree = false
+                    break
+                }
+            }
+
+            // Hvis alle er enige, så oppdater staten 
+            if allAgree {
+                myOrders[f][d] = Order{
+                    syncState: Confirmed,
+					// Setter ownerID etter den har vært i assigned. Evt trenger vi den? Ja tror det. Hvor skal den være?
+                    ownerID:   noOwner,
+                }
+            }
+        }
+    }
+    return myOrders, changed
+}
+
+
+func deleteIfAllAgree(worldviewsMap map[int]Worldview, myID int) (HallOrders, bool) {
+	myOrders := worldviewsMap[myID].hallOrders
+	changed := false
+
+    for f := 0; f < NumFloors; f++ {
+        for d := 0; d < Directions; d++ {
+            if myOrders[f][d].syncState != DeleteProposed {
+                continue
+            }
+
+            allAgree := true
+            for _, peer := range worldviewsMap {
+                peerState := peer.hallOrders[f][d].syncState
+                if peerState != DeleteProposed && peerState != None {
+                    allAgree = false
+                    break
+                }
+            }
+
+
+            if allAgree {
+                myOrders[f][d] = Order{
+                    syncState: None,
+                    ownerID:   noOwner,
+                }
+                changed = true
+            }
+        }
+    }
+    return myOrders, changed
+}
+
+
+
+
+
 // _______________________________________________________________
 // ----------------GOROUTINE FOR WORLDVIEW------------------------
 // _______________________________________________________________
@@ -183,7 +253,23 @@ func GoroutineForWorldview(
 	
 		// Får inn en peers worldview. Må Oppdatere map og sende til andre moduler
 	case inputPeerWorldview := <-networkToWorldviewCh
-		// Her må updatePeerWorldview ligge
+		// Vi må her bruke channel til å kjøre sync. Føler derfor at kanskje de funksjonene under også burde ligge der. 
+		// Her må updatePeerWorldview ligge. Evt kan den bare inneholde det under. 
+		// TODO: Her må delete if all agree og confirm if all agree ligge. Burde de returnere true og da burde sende på channel med lys?
+		
+		// TODO: Burde dette være i en egen funksjon?
+		updatedOrders, confirmed := confirmIfAllAgree(worldviewsMap, myID)
+		if confirmed {
+			worldviewsMap[myID].hallOrders = updatedOrders
+			hallLightsCh <- updatedOrders  // skru PÅ lys
+		}
+		
+		updatedOrders, deleted := deleteIfAllAgree(worldviewsMap, myID)
+		if deleted {
+			worldviewsMap[myID].hallOrders = updatedOrders
+			hallLightsCh <- updatedOrders  // skru AV lys
+		}
+
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	
 		// Får inn at en peer lever
@@ -208,7 +294,7 @@ func GoroutineForWorldview(
 //------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
 //___________________________________________________________________________
 
-type hallOrdersPublic [NumFloors][Directions]Order
+type HallOrdersPublic [NumFloors][Directions]Order
 
 type TransferWorldview struct {
 	IdElevator  int
@@ -243,6 +329,20 @@ func copyOneWorldviewStringKey(latestWorldviews map[int]Worldview, myID int) map
     copied[strconv.Itoa(myID)] = latestWorldviews[myID].copyWorldview()
     return copied
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
 func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-chan StateElevator) Worldview {
