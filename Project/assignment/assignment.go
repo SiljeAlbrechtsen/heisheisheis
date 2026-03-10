@@ -90,7 +90,7 @@ func assignHallRequests(latestWorldviews map[int]Worldview, MyID int) (map[strin
 
 // TODO: LEGG INN CHANNEL I MAIN
 // GO routine
-func runHallRequestAssignerEvery10ms(MyID int, in <-chan map[int]Worldview, out chan<- [][]bool) {
+func runHallRequestAssignerEvery10ms(MyID int, in <-chan map[int]Worldview, assignmentToFSMCh chan<- [][]bool) {
 	ticker := time.NewTicker(10 * time.Millisecond)
     defer ticker.Stop()
 

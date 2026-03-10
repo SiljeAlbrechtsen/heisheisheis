@@ -19,6 +19,22 @@ import (
 // Note that all members we want to transmit must be public. Any private members
 //  will be received as zero-values.
 
+func transmittingWorldview(worldviewTx <-chan Worldview, worldviewToNetworkCh chan<- Worldview) {
+	WorldviewMsg := <-worldviewToNetworkCh
+
+	for {
+		select {
+		// Hvis worldview endres
+		case newMsg := <-worldviewToNetworkCh:
+			WorldviewMsg = newMsg
+
+		// sender worldview etter 1 sek
+		case <-time.After(1 * time.Second):
+			worldviewTx <- WorldviewMsg
+		}
+	}
+}
+
 func main() {
 	elevio.Init("localhost:15657", 4)
 
@@ -63,40 +79,24 @@ func main() {
 	//__________________________________________________________________
 
 	// We make channels for sending and receiving our custom data types
-	heartbeatTx := make(chan int)
-	heartbeatRx := make(chan int)
+	worldviewTx := make(chan int)
+	worldviewRx := make(chan int)
 	// ... and start the transmitter/receiver pair on some port
 	// These functi
 	//  start multiple transmitters/receivers on the same port.
-	go bcast.Transmitter(10002, heartbeatTx)
-	go bcast.Receiver(10002, heartbeatRx)
+	go bcast.Transmitter(10002, worldviewTx)
+	go bcast.Receiver(10002, worldviewRx)
 
 	//__________________________________________________________________
 	//----------- SENDER DENNE NODEN SINE HEARTBEATS PERIODISK ---------
 	//__________________________________________________________________
 
-	//worldviewCh := make(chan Worldview)
+	worldviewCh := make(chan Worldview)
 
-	floorCh := make(chan int)
-
-	go elevio.PollFloorSensor(floorCh)
+	// gorutine som sender fra vårt worldview, erdig formatert, fra worldview til nettverk
+	//go elevio.PollFloorSensor(floorCh)
 
 	// The example message. We just send one of these every second.
-	go func() {
-		HeartbeatMsg := <-floorCh
-
-		for {
-			select {
-			// Hvis worldview endres
-			case newMsg := <-floorCh:
-				HeartbeatMsg = newMsg
-
-			// sender worldview etter 1 sek
-			case <-time.After(1 * time.Second):
-				heartbeatTx <- HeartbeatMsg
-			}
-		}
-	}()
 
 	//__________________________________________________________________
 	//----------------  PRINTER INFORMASJON ----------------------------
@@ -111,8 +111,10 @@ func main() {
 			fmt.Printf("  New:      %q\n", p.New)
 			fmt.Printf("  Lost:     %q\n", p.Lost)
 
-		case a := <-heartbeatRx:
+		case a := <- worldviewRx:
 			fmt.Printf("Received from %q: %#v\n", id, a)
+			//TODO
+			// sende mottat wv til worldview, updateWorldview
 		}
 	}
 }
