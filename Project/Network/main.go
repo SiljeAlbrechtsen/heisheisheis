@@ -84,7 +84,6 @@ func setupWorldviewNetwork() (chan<- Worldview, <-chan Worldview) {
 	return worldviewTx, worldviewRx
 }
 
-func 
 
 
 func main() {
