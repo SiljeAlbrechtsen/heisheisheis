@@ -1,4 +1,6 @@
 package main
+//run
+//GO111MODULE=off go run .
 
 //"fmt"  //Begge brukes i test main
 //"time" //

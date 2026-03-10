@@ -13,6 +13,21 @@ import (
 
 ///Kan fjernes kanskje? heller importere fra en mer definert pakke?
 ////////////////////////////////////////////////////////////////////
+/*
+Hver gang den endrer elevator state skal den sende oppdatering til worldview
+- ankomst floor, obstruction, error +++
+- lage GO routine for FSM
+- At vi bare får endre elevator instansen en og en. Altså bare ha en funksjon for det.
+
+
+Implementere knappetrykk i annen modul
+- Skille på cab og hall orders
+- Skal sende over til worldview
+
+
+
+*/
+
 
 const N_FLOORS = 4
 const N_BUTTONS = 3
@@ -107,11 +122,30 @@ func ClearFloorRequest(elevator *ElevatorState) { //Clearer llisten fra bunn opp
 			if elevator.requests[floor][button] {
 				MoveToFloor(elevator, floor)
 				elevator.requests[floor][button] = false
-				PrintElevatorState(*elevator)
+				PrintElevatorState(*elevator) //visiualisering, slett etter testing
 			}
 		}
 	}
 }
+
+/*
+for {
+	select {
+	case newState := <-elevatorStateCh: // tar inn hvilke floor vi skal til
+		// kjør til den etasje
+
+	spørre chat hvordan kan jeg sikre at jeg bare endrer elevator state en og en, altså at jeg ikke har flere funksjoner som endrer den samtidig. Kan jeg ha en kanal som alle må sende til for å endre elevator state, og så har jeg en go routine som tar inn på den kanalen og endrer elevator state?
+}
+
+dette kan ligge et annet sted. Spør chat hcpr det er hensiktsmessig å ha det. kan spørre om det finnes en bedre måte
+for {
+	select {
+	case channel inn knappetrykk for cab order
+		hva skjer når vi får en cab order. Den må sende til wprld
+	case channel inn knappetrykk for hall order
+		hva skjer når vi får en hall order. Den må sende til world
+*/
+
 
 func MoveToFloor(elevator *ElevatorState, targetFloor int) int {
 	currentFloor := elevio.GetFloor()
@@ -122,11 +156,13 @@ func MoveToFloor(elevator *ElevatorState, targetFloor int) int {
 		}
 		if targetFloor > currentFloor {
 			elevio.SetMotorDirection(elevio.MD_Up)
+
 		} else if targetFloor < currentFloor {
 			elevio.SetMotorDirection(elevio.MD_Down)
+
 		} else {
 			elevio.SetMotorDirection(elevio.MD_Stop)
-			fmt.Printf("Arrived at floor %d\n", targetFloor)
+			fmt.Printf("Arrived at floor %d\n", targetFloor)//
 			ServeFloor(elevator)
 			return elevio.GetFloor()
 		}
