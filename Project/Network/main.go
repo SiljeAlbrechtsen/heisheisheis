@@ -1,7 +1,6 @@
 package main
 
 import (
-	"Driver-go/elevio"
 	"Network/network/bcast"
 	"Network/network/localip"
 	"Network/network/peers"
@@ -19,7 +18,7 @@ import (
 // Note that all members we want to transmit must be public. Any private members
 //  will be received as zero-values.
 
-func transmittingWorldview(worldviewTx <-chan Worldview, worldviewToNetworkCh chan<- Worldview) {
+func transmittiWorldviewPeriodically(worldviewTx chan<- Worldview, worldviewToNetworkCh <-chan Worldview) {
 	WorldviewMsg := <-worldviewToNetworkCh
 
 	for {
@@ -35,15 +34,7 @@ func transmittingWorldview(worldviewTx <-chan Worldview, worldviewToNetworkCh ch
 	}
 }
 
-func main() {
-	elevio.Init("localhost:15657", 4)
-
-	//__________________________________________________________________
-	//----------------  SETTER UNIK ID FOR DENNE NODEN -----------------
-	//__________________________________________________________________
-
-	// Our id can be anything. Here we pass it on the command line, using
-	//  `go run main.go -id=our_id`
+func getNodeID() string {
 	var id string
 	flag.StringVar(&id, "id", "", "id of this peer")
 	flag.Parse()
@@ -59,13 +50,17 @@ func main() {
 		}
 		id = fmt.Sprintf("peer-%s-%d", localIP, os.Getpid())
 	}
+	return id
+}
 
-	//__________________________________________________________________
-	//---------------------- PEER DISCOVERY ----------------------------
-	//__________________________________________________________________
+type Worldview struct {
+	ID   string
+	Iter int
+}
 
+func startPeerDiscovery(id string) <-chan peers.PeerUpdate {
 	// We make a channel for receiving updates on the id's of the peers that are
-	//  alive on the network
+	// alive on the network
 	peerUpdateCh := make(chan peers.PeerUpdate)
 
 	// We can disable/enable the transmitter after it has been started.
@@ -74,24 +69,54 @@ func main() {
 	go peers.Transmitter(10001, id, peerTxEnable)
 	go peers.Receiver(10001, peerUpdateCh)
 
+	return peerUpdateCh
+}
+
+func setupWorldviewNetwork() (chan<- Worldview, <-chan Worldview) {
+	// We make channels for sending and receiving our custom data types
+	worldviewTx := make(chan Worldview)
+	worldviewRx := make(chan Worldview)
+
+	// And start the transmitter/receiver pair on some port
+	go bcast.Transmitter(10002, worldviewTx)
+	go bcast.Receiver(10002, worldviewRx)
+
+	return worldviewTx, worldviewRx
+}
+
+func 
+
+
+func main() {
+
+	//__________________________________________________________________
+	//----------------  SETTER UNIK ID FOR DENNE NODEN -----------------
+	//__________________________________________________________________
+
+	// `go run main.go -id=our_id`
+	id := getNodeID()
+
+	//__________________________________________________________________
+	//---------------------- PEER DISCOVERY ----------------------------
+	//__________________________________________________________________
+
+	peerUpdateCh := startPeerDiscovery(id)
+
 	//__________________________________________________________________
 	//------------- STARTER KOMMUNIKASJON MED HEARTBEATS ---------------
 	//__________________________________________________________________
 
-	// We make channels for sending and receiving our custom data types
-	worldviewTx := make(chan int)
-	worldviewRx := make(chan int)
-	// ... and start the transmitter/receiver pair on some port
-	// These functi
-	//  start multiple transmitters/receivers on the same port.
-	go bcast.Transmitter(10002, worldviewTx)
-	go bcast.Receiver(10002, worldviewRx)
+	worldviewTx, worldviewRx := setupWorldviewNetwork()
 
 	//__________________________________________________________________
 	//----------- SENDER DENNE NODEN SINE HEARTBEATS PERIODISK ---------
 	//__________________________________________________________________
 
-	worldviewCh := make(chan Worldview)
+	worldviewToNetworkCh := make(chan Worldview)
+
+	go transmittiWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
+
+
 
 	// gorutine som sender fra vårt worldview, erdig formatert, fra worldview til nettverk
 	//go elevio.PollFloorSensor(floorCh)
@@ -111,10 +136,11 @@ func main() {
 			fmt.Printf("  New:      %q\n", p.New)
 			fmt.Printf("  Lost:     %q\n", p.Lost)
 
-		case a := <- worldviewRx:
+		case a := <-worldviewRx:
 			fmt.Printf("Received from %q: %#v\n", id, a)
 			//TODO
 			// sende mottat wv til worldview, updateWorldview
 		}
 	}
+	
 }
