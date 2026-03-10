@@ -73,7 +73,7 @@ networkToWorldviewCh := make (chan Worldview)
 syncToWorldviewCh := make (chan HallOrder)
 
 newPeerIdCh := make (chan string) 
-lostPeerIdCh := make (chan string)
+lostPeerIdCh := makbuttonse (chan string)
 
 worldviewToNetworkCh := make (chan ap[string]TransferWorldview)
 worldviewToAssignerCh := make (chan map[int]Worldview)

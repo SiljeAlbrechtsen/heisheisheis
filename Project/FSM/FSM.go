@@ -1,4 +1,4 @@
-package main // endre til FSM
+package fsm
 
 import (
 	"fmt"
@@ -8,11 +8,9 @@ import (
 	"strings"
 	"time"
 
-	elevio "../Driver"
+	elevio "Project/Driver"
 )
 
-///Kan fjernes kanskje? heller importere fra en mer definert pakke?
-////////////////////////////////////////////////////////////////////
 /*
 Hver gang den endrer elevator state skal den sende oppdatering til worldview
 - ankomst floor, obstruction, error +++
@@ -23,61 +21,8 @@ Hver gang den endrer elevator state skal den sende oppdatering til worldview
 Implementere knappetrykk i annen modul
 - Skille på cab og hall orders
 - Skal sende over til worldview
-
-
-
+Done
 */
-
-
-const N_FLOORS = 4
-const N_BUTTONS = 3
-
-type Button int
-
-const (
-	B_HallUp Button = iota
-	B_HallDown
-	B_Cab
-)
-
-type Behaviour int
-
-const (
-	EB_Idle Behaviour = iota
-	EB_DoorOpen
-	EB_Moving
-)
-
-type Direction int
-
-const (
-	D_Down Direction = -1
-	D_Stop Direction = 0
-	D_Up   Direction = 1
-)
-
-type ElevatorState struct {
-	floor     int
-	dirn      Direction
-	behaviour Behaviour
-	requests  [N_FLOORS][N_BUTTONS]bool
-	config    struct {
-		doorOpenDuration_s float64
-	}
-}
-
-func InitElevatorState() ElevatorState {
-	addr := resolveElevatorAddr()
-	elevio.Init(addr, N_FLOORS)
-	return ElevatorState{
-		floor:     -1,
-		dirn:      D_Stop,
-		behaviour: EB_Idle,
-		config: struct {
-			doorOpenDuration_s float64
-		}{doorOpenDuration_s: 3.0},
-	}
-}
 
 func resolveElevatorAddr() string { //Sjekke denne, skjønne hvordan den løser addr, og om den å evt fjernes/forenkles
 	if addr := strings.TrimSpace(os.Getenv("ELEVATOR_ADDR")); addr != "" {
@@ -100,59 +45,48 @@ func resolveElevatorAddr() string { //Sjekke denne, skjønne hvordan den løser 
 	return candidates[0]
 }
 
-/////////////////////////////////////////////////////////////////////////////////
-
 func InitElevator(elevator *ElevatorState) { //Kjører til en etasje og stopper ved første etasje nedover, eller hvis den allerede er i en etasje så gjør den ingenting
 	if elevio.GetFloor() == -1 {
 		fmt.Println("Elevator is between floors, moving down to nearest floor")
 		elevio.SetMotorDirection(elevio.MD_Down)
-		for elevio.GetFloor() == -1 {
+
+		for elevio.GetFloor() == -1 { //pause fuksjonen til den kommer ned
 			time.Sleep(50 * time.Millisecond)
 		}
+
 		elevio.SetMotorDirection(elevio.MD_Stop)
+
 		fmt.Printf("Arrived at floor %d\n", elevio.GetFloor())
 	} else {
 		fmt.Printf("Elevator is at floor %d\n", elevio.GetFloor())
 	}
 }
 
-func ClearFloorRequest(elevator *ElevatorState) { //Clearer llisten fra bunn opp så etg 0 -> etg 1 -> etg 2 -> etg 3 ...
-	for floor := 0; floor < len(elevator.requests); floor++ {
-		for button := 0; button < len(elevator.requests[floor]); button++ {
-			if elevator.requests[floor][button] {
-				MoveToFloor(elevator, floor)
-				elevator.requests[floor][button] = false
-				PrintElevatorState(*elevator) //visiualisering, slett etter testing
+/////////////////////////////////////////////////////////////////////////////////
+
+func FSM(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan ElevatorState) { //sjekke om man kan endre [N_FLOORS][N_BUTTONS]bool til noe enklere navn
+
+	elevatorState := InitElevatorState()
+
+	InitElevator(&elevatorState)
+
+	for {
+		select {
+		case newRequests := <-requests:
+			if newRequests != elevatorState.requests {
+				elevatorState.requests = newRequests
+				//PrintElevatorState(elevatorState) //TO DO fjerne print
+				MoveToFloor(&elevatorState, FindFloorFromRequest(elevatorState.requests))
 			}
 		}
 	}
 }
 
-/*
-for {
-	select {
-	case newState := <-elevatorStateCh: // tar inn hvilke floor vi skal til
-		// kjør til den etasje
-
-	spørre chat hvordan kan jeg sikre at jeg bare endrer elevator state en og en, altså at jeg ikke har flere funksjoner som endrer den samtidig. Kan jeg ha en kanal som alle må sende til for å endre elevator state, og så har jeg en go routine som tar inn på den kanalen og endrer elevator state?
-}
-
-dette kan ligge et annet sted. Spør chat hcpr det er hensiktsmessig å ha det. kan spørre om det finnes en bedre måte
-for {
-	select {
-	case channel inn knappetrykk for cab order
-		hva skjer når vi får en cab order. Den må sende til wprld
-	case channel inn knappetrykk for hall order
-		hva skjer når vi får en hall order. Den må sende til world
-*/
-
-
-func MoveToFloor(elevator *ElevatorState, targetFloor int) int {
+func MoveToFloor(elevator *ElevatorState, targetFloor int) int { // TO DO endre til å bruke state update funksjonene
 	currentFloor := elevio.GetFloor()
 	for {
 		if elevio.GetFloor() != -1 {
 			currentFloor = elevio.GetFloor()
-			fmt.Println(currentFloor) // Slett etter testing
 		}
 		if targetFloor > currentFloor {
 			elevio.SetMotorDirection(elevio.MD_Up)
@@ -162,7 +96,7 @@ func MoveToFloor(elevator *ElevatorState, targetFloor int) int {
 
 		} else {
 			elevio.SetMotorDirection(elevio.MD_Stop)
-			fmt.Printf("Arrived at floor %d\n", targetFloor)//
+			fmt.Printf("Arrived at floor %d\n", targetFloor) //
 			ServeFloor(elevator)
 			return elevio.GetFloor()
 		}
@@ -183,4 +117,21 @@ func ServeFloor(elevator *ElevatorState) { //stopper åpner dør og venter i 3 s
 
 func PrintElevatorState(e ElevatorState) {
 	fmt.Printf("Floor: %d\nDirection: %d\nBehaviour: %d\nRequests: %v\n", e.floor, e.dirn, e.behaviour, e.requests)
+}
+
+func UpdateRequest(requests [N_FLOORS][N_BUTTONS]bool, floor int, button elevio.ButtonType) [N_FLOORS][N_BUTTONS]bool {
+	requests[floor][button] = true
+	fmt.Printf("Updated---\n")
+	return requests
+}
+
+func FindFloorFromRequest(request [N_FLOORS][N_BUTTONS]bool) int { //Clearer listen fra bunn opp så etg 0 -> etg 1 -> etg 2 -> etg 3 ...
+	for floor := 0; floor < len(request); floor++ {
+		for button := 0; button < len(request[floor]); button++ {
+			if request[floor][button] {
+				return floor
+			}
+		}
+	}
+	return 0
 }

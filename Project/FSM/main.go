@@ -1,13 +1,14 @@
-package main
+package fsm
+
 //run
-//GO111MODULE=off go run .
+//go run ./FSM
 
 //"fmt"  //Begge brukes i test main
 //"time" //
 //
 //elevio "../Driver"
 
-func main() {
+func DebugRun() {
 
 	elevatorState := InitElevatorState()
 
