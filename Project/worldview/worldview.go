@@ -74,8 +74,7 @@ func sendWorldviewsToOtherModules(
 	updatedWorldviewToNetworkCh chan<- map[string]TransferWorldview, 
 	updatedWorldviewToAssignerCh chan<- map[int]TransferWorldview, 
 	updatedWorldviewToSyncCh chan<- map[int]TransferWorldview, 
-	myID int)  
-	{
+	myID int)  {
 	updatedWorldviewToNetworkCh <- copyWorldviewsStringKey(latestWorldviews, myID)  
 	updatedWorldviewToAssignerCh <- copyWorldviews(latestWorldviews)
 	updatedWorldviewToSyncCh <- copyWorldviews(latestWorldviews)
@@ -106,19 +105,29 @@ func updatePeerWorldviewFromNetwork(worldview Worldview, myID int) { // Ingrid
 // funksjon som legger inn caborders/hallorders inn i din egen worldview. evt samle de sånn at vi kan bruke samme funksjon for de
 
 // Setter state fra confirmet til uncondiremd og ownerID til peerDied, kjøres når heis dør
-func markPeerDead(order Order) Order {
-	if order.orderSyncState == Confirmed {
-		order.orderSyncState = Unconfirmed
-	}
-	order.ownerID = peerDied
-	return order
+func markPeerDeadInHallOrders(hallOrders Hallorders) Hallorder {
+	ho := hallOrders
+
+	for i, row := range ho{
+		for j := range row {
+			order := ho[i][j]	
+			if order.orderSyncState == Confirmed {
+				order.orderSyncState = Unconfirmed
+				}
+
+				order.ownerID = peerDied
+				
+			ho[i][j] = order
+			}
+		}
+	return ho	
 }
 
 
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
-func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-chan StateElevator) Worldview {
+func updateWorldviewWithElevatorState(worldview Worldview, elevatorToWorldviewCh <-chan StateElevator) Worldview {
     wv := worldview
-    elevatorState := <-elevatorStateCh
+    elevatorState := <-elevatorToWorldviewCh
     wv.state = elevatorState
     floor := elevatorState.floor
     dir := elevatorState.dir
@@ -145,7 +154,7 @@ func GoroutineForWorldview(
 	myID 						  int,
 	elevatorToWorldviewCh  <-chan StateElevator,
 	syncToWorldviewCh      <-chan HallOrders,
-	networkToWorldviewCh   <-chan wordlview,
+	networkToWorldviewCh   <-chan Wordlview,
 	// TODO
 	newPeerIdCh   <-chan string, 
 	lostPeerIdCh    <-chan string,
@@ -260,7 +269,6 @@ func HandleLostPeers(latestWorldviews map[int]Worldview, lostPeerId string){
 
 func SetNodeDead(latestWorldviews map[int]Worldview, id string){
 	lwv := latestWorldviews
-
 	//TODO: sette elevator til dead
 	for _, wv := range lwv{
 		for _, ho := range wv.hallOrders {

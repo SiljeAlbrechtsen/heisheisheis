@@ -19,7 +19,7 @@ import (
 //  will be received as zero-values.
 
 // Tar inn vår worldview og kanalen vi skal sende på, og legger periodisk worldview inn på tx-kanalen
-func TransmittiWorldviewPeriodically(worldviewTx chan<- Worldview, worldviewToNetworkCh <-chan Worldview) {
+func TransmitWorldviewPeriodically(worldviewTx chan<- Worldview, worldviewToNetworkCh <-chan Worldview) {
 	WorldviewMsg := <-worldviewToNetworkCh
 
 	for {
@@ -36,7 +36,7 @@ func TransmittiWorldviewPeriodically(worldviewTx chan<- Worldview, worldviewToNe
 }
 
 // Tar inn worldviewen vi mottar på Rx og setter den på kanalen som sender til worldview
-func FirwardWorldviewFromNetwork(worldviewRx <-chan Worldview, networkToWorldviewCh chan<- Worldview) {
+func ForwardWorldviewFromNetwork(worldviewRx <-chan Worldview, networkToWorldviewCh chan<- Worldview) {
 	for {
 		w := <-worldviewRx
 		networkToWorldviewCh <- w
@@ -60,11 +60,6 @@ func GetNodeID() string {
 		id = fmt.Sprintf("peer-%s-%d", localIP, os.Getpid())
 	}
 	return id
-}
-
-type Worldview struct {
-	ID   string
-	Iter int
 }
 
 func StartPeerDiscovery(id string) <-chan peers.PeerUpdate {

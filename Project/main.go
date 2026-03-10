@@ -2,6 +2,7 @@ package main
 
 import (
 	"Project/Network/setup"
+	"Project/worldview"
 	//"flag"
 	"fmt"
 	//"os"
@@ -9,10 +10,6 @@ import (
 )
 
 func main() {
-	
-	//__________________________________________________________________
-	//----------------  SETTER UNIK ID FOR DENNE NODEN -----------------
-	//__________________________________________________________________
 
 	// `go run main.go -id=our_id`
 	id := setup.GetNodeID()
@@ -35,13 +32,7 @@ func main() {
 
 	worldviewToNetworkCh := make(chan setup.Worldview)
 
-	go setup.TransmittiWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
-
-
-	// gorutine som sender fra vårt worldview, erdig formatert, fra worldview til nettverk
-	//go elevio.PollFloorSensor(floorCh)
-
-	// The example message. We just send one of these every second.
+	go setup.TransmitWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
 
 	//__________________________________________________________________
 	//----------------  PRINTER INFORMASJON ----------------------------
@@ -65,3 +56,28 @@ func main() {
 	
 }
 
+
+
+/*
+
+Channels
+
+
+
+updatedWorldviewToNetworkCh := make (chan Worldview)
+updatedWorldviewToAssignerCh := make (chan Worldview)
+updatedWorldviewToSyncCh := make (chan Worldview)
+
+elevatorToWorldviewCh := make (chan StateEleator)
+networkToWorldviewCh := make (chan Worldview)
+syncToWorldviewCh := make (chan HallOrder)
+
+newPeerIdCh := make (chan string) 
+lostPeerIdCh := make (chan string)
+
+worldviewToNetworkCh := make (chan ap[string]TransferWorldview)
+worldviewToAssignerCh := make (chan map[int]Worldview)
+worldviewToSyncCh := make (chan map[int]Worldview)
+
+
+*/
