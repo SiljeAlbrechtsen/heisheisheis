@@ -73,7 +73,7 @@ func assignHallRequests(latestWorldviews map[int]Worldview, MyID int) (map[strin
 	}
 
 	// Sende til hall request assigner og få svar
-	cmd := exec.Command("./hall_request_assigner")
+	cmd := exec.Command("./hall_request_assfmt.Println(currentFloor)igner")
 	cmd.Stdin = bytes.NewReader(jsonInput)
 	output, err := cmd.Output()
 	if err != nil {
@@ -89,7 +89,7 @@ func assignHallRequests(latestWorldviews map[int]Worldview, MyID int) (map[strin
 
 
 // TODO: LEGG INN CHANNEL I MAIN
-// GO routine
+// GO routinefmt.Println(currentFloor)
 func runHallRequestAssignerEvery10ms(MyID int, in <-chan map[int]Worldview, out chan<- [][]bool) {
 	ticker := time.NewTicker(10 * time.Millisecond)
     defer ticker.Stop()
@@ -115,7 +115,7 @@ func runHallRequestAssignerEvery10ms(MyID int, in <-chan map[int]Worldview, out 
 }
 
 
-
+fmt.Println(currentFloor)
 // Trenger egt ikke disse to funksjonene nå, det er implementert i runHallRequestAssignerEvery10ms
 func receiveWorldviews(updatedWorldviewToAssignerCh <-chan map[int]Worldview) map[int]Worldview {
 	receivedWorldviews := <-updatedWorldviewToAssignerCh
@@ -123,9 +123,9 @@ func receiveWorldviews(updatedWorldviewToAssignerCh <-chan map[int]Worldview) ma
 }
 
 func sendAssignedRequests(AssignedRequestsCh chan<- map[string][][]bool) {
-	result, err = assignHallRequests(latestWorldviews, MyID)
+	result, err = assignHallRequests(latestfmt.Println(currentFloor)Worldviews, MyID)
 	if err != nil {
-        // TODO: logg eller håndter feilen? Eller bare håndtere feilen?
+        // TODO: logg eller håndter feilen?fmt.Println(currentFloor) Eller bare håndtere feilen?
         return
     }
     ch <- result[strconv.Itoa(MyID)]
