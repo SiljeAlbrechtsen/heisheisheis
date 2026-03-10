@@ -70,13 +70,14 @@ type Worldview struct {
 
 // La de inn i samme funksjon siden de skal kjøres samtidig. Skal kjøres når worldview oppdateres
 func sendWorldviewsToOtherModules(
+	myID int,
 	latestWorldviews map[int]Worldview, 
-	updatedWorldviewToNetworkCh chan<- map[string]TransferWorldview, 
-	updatedWorldviewToAssignerCh chan<- map[int]TransferWorldview, 
-	updatedWorldviewToSyncCh chan<- map[int]TransferWorldview, 
-	myID int)  {
-	updatedWorldviewToNetworkCh <- copyWorldviewsStringKey(latestWorldviews, myID)  
+	updatedWorldviewToAssignerCh  chan<- map[int]TransferWorldview, 
+	updatedWorldviewToNetworkCh   chan<- map[string]TransferWorldview, 
+	updatedWorldviewToSyncCh      chan<- map[int]TransferWorldview, 
+	) {
 	updatedWorldviewToAssignerCh <- copyWorldviews(latestWorldviews)
+	updatedWorldviewToNetworkCh <- copyWorldviewsStringKey(latestWorldviews, myID)  
 	updatedWorldviewToSyncCh <- copyWorldviews(latestWorldviews)
 }
 
@@ -159,44 +160,47 @@ func GoroutineForWorldview(
 	newPeerIdCh   <-chan string, 
 	lostPeerIdCh    <-chan string,
 
-	worldviewToAssignerCh   chan<- map[int]Worldview
-	worldviewToSyncCh       chan<- map[int]Worldview
-	worldviewToNetworkCh    chan<- map[string]TransferWorldview) 
-	{ 
+	worldviewToAssignerCh   chan<- map[int]TransferWorldview,
+	worldviewToSyncCh       chan<- map[int]Worldview,
+	worldviewToNetworkCh    chan<- map[string]worldview,
+	) { 
 
 	
 	worldviewsMap := make(map[int]Worldview)
 
 	for {
-		select
+		select {
 	
 	// Får inn endring på state elevator. Hva skal skje da?
-	case: inputStateElevator := <-elevatorToWorldviewCh
+	case inputStateElevator := <-elevatorToWorldviewCh
 		updateWorldviewWithElevatorState() // ingrid hjelp
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	
 		// Får inn syncet hallorders fra sync. Den må da oppdatere får worldview også sende den oppdaterte til andre moduler
-	case: inputHallOrders := <-syncToWorldviewCh
+	case inputHallOrders := <-syncToWorldviewCh
 		updateWorldviewFromSync(worldviewsMap, inputHallOrders, myID)
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	
 		// Får inn en peers worldview. Må Oppdatere map og sende til andre moduler
-	case: inputPeerWorldview := <-networkToWorldviewCh
+	case inputPeerWorldview := <-networkToWorldviewCh
 		// Her må updatePeerWorldview ligge
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	
 		// Får inn at en peer lever
-	case: inputNewPeer := <-newPeerIdCh
+	case inputNewPeer := <-newPeerIdCh
 		// Må kjøre en funksjon
 
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	
 		// Får inn at en peer er død
-	case: inputDeadPeer := <-lostPeerIdCh
+	case inputDeadPeer := <-lostPeerIdCh
 		// Må kjøre en funksjon
 		// peerdead funksjonen må kjøres her et sted. 
 		HandleLostPeers(worldviewsMap, inputDeadPeer)
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
+	
+	case 
+		}
 	} 
 }
 
