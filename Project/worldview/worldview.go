@@ -191,37 +191,6 @@ func GoroutineForWorldview(
 	} 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 //___________________________________________________________________________
 //------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
 //___________________________________________________________________________
@@ -260,4 +229,42 @@ func copyOneWorldviewStringKey(latestWorldviews map[int]Worldview, myID int) map
     copied := make(map[string]TransferLatestWorldviews, 1)
     copied[strconv.Itoa(myID)] = latestWorldviews[myID].copyWorldview()
     return copied
+}
+
+// Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
+func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-chan StateElevator) Worldview {
+    wv := worldview
+    elevatorState := <-elevatorStateCh
+    wv.state = elevatorState
+    floor := elevatorState.floor
+    dir := elevatorState.dir
+
+    if wv.hallOrders[floor][dir].ownerID == wv.idElevator {
+        if wv.hallOrders[floor][dir].syncState == Confirmed {
+            wv.hallOrders[floor][dir].syncState = DeleteProposed
+        }
+    }
+    if wv.mycabOrders[floor] == true {
+        wv.mycabOrders[floor] = false
+    }
+    return wv
+}
+
+
+func HandleLostPeers(latestWorldviews map[int]Worldview, lostPeerId string){
+	for {
+		lostID := lostPeerId
+		SetNodeDead(latestWorldviews, lostID)
+	}
+}
+
+func SetNodeDead(latestWorldviews map[int]Worldview, id string){
+	lwv := latestWorldviews
+
+	//TODO: sette elevator til dead
+	for _, wv := range lwv{
+		for _, ho := range wv.hallOrders {
+			wv.hallOrders = markPeerDeadInHallOrders(vw.hallOrders)
+		}
+	}
 }
