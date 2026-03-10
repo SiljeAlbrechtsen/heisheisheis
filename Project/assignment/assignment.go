@@ -65,6 +65,7 @@ func convertWorldviewToJSON(latestWorldviews map[int]Worldview, MyID int) ([]byt
     return json.MarshalIndent(input, "", "\t")
 }
 
+// TODO: Ligger hall_request_assigner i riktig mappe?
 // Eller bare assignRequests, siden den sier noe om caborders også?
 func assignHallRequests(latestWorldviews map[int]Worldview, MyID int) (map[string][][]bool, error) {
 	jsonInput, err := convertWorldviewToJSON(latestWorldview, MyID)

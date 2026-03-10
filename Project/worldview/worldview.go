@@ -7,52 +7,19 @@ Laget sync motta funksjon
 laget sync sende funk i sync modul
 laget go-routine i sync
 Fikse goroutine i assigner
+- fikse goroutine i worldview
 
 Silje: liste på todo
-- fikse goroutine i worldview
 - få med alle endringer fra elevator
 - LEGG INN CHANNEL I MAIN
-- hva som skjer når en peer dør
 
+
+- hva som skjer når en peer dør
 - lage nettwork motta funk (ingrig)
 
 TODO: Ordne sånn at alle channels har samme navn
 */
 
-
-
-/*
-TODO:
-Skrive GO-routines for assigner, worldview, sync
-Finne ut hvordan håndtere data som kommer fra FSM - Ingrid
-Finne ut hvordan håndtere data som kommer fra Network
-- Når peer dør.
-- Når vi får inn heartbeat. 
-Finne ut hvordan man kan ha network alene. Altså at den ikke er main. Go-routine
-// Finne ut hvordan vi gjør det når vi bare skal ha en worldview. Evt sette myID som en global const variabel som vi bruker som indeks.
-// Når vi starter programmet må vi legge inn vår worldview som ID_0 elns
-Være sikker på: håndterer vi button light contract? Når lys skrus på, er alle enige?
-Go-routine for sync kjøres hver gang den får inn noe på channel
-Samme med worldview
-Ligger hall_request_assigner i riktig mappe?
-Dobbeltsjekk go rutne for assigner, trenger den ticker?
-
-- Lage funksjoner av network-main som kan kjøres i hoved-main
-- Lage funksjon som sjekker om id fra terminal finnes fra før
-
-Testing:
-Finne ut hva vi burde teste og hvordan?
-Teste en og en Go-routine? Da kan også noen feilsøke, mens andre fortsetter å kode
-
-EnkelHeisLogikk: (Alexsey)
-Modularisere koden og strukturere. Forslag: elevator – selve heistilstanden (etasje, retning, dør åpen/lukket, motor). controller / fsm – logikken som bestemmer hva heisen skal gjøre basert på tilstand og bestillinger.
-Forstå den
-Sende ElevatorState til Worldview Channel elevatorStateCh
-Motta matrise fra assigner via channel AssignedRequestsCh
-Finne ut hva den skal gjøre med matrisen. Hvordan heisen blir styrt av denne matrisen?
-Skrive Go-routines. minst en for FSM og en for driver?
-Være sikker på: håndterer vi button light contract?
-*/
 
 //______________________________________________________________________________________________________
 //----------------  Structs ----------------------------------------------------------------------------
@@ -96,28 +63,9 @@ type Worldview struct {
 	mycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
 }
 
-// Struct der alle sine worldviews
-// type MergedWorldviews struct {
-//	Elevators map[ElevID]ElevState
-//}
-
 //____________________________________________________________________________________________________________________
 //---------------------- CHANNELS -------------------------------	updatedWorldviewToNetworkCh <- copyWorldviews(latestWorldviews)-----------------------------------------------------
-//____________________________________________________________________________________________________________________
-
-
-/*
-Inn: elevatorState fra FSM
-     worldviews fra andre peers fra Network
-     oppdaterte orders i hallOrders fra Assigner
-
-Ut: rå worldview-map til sync
-    order-lister til Assigner
-	nye endringer på nettverk
-*/      
-
-
-
+//____________________________________________________________________________________________________________________    
 
 
 // La de inn i samme funksjon siden de skal kjøres samtidig. Skal kjøres når worldview oppdateres
@@ -146,14 +94,12 @@ func updateWorldviewFromSync(latestWorldviews map[int]Worldview, orders hallOrde
 	latestWorldviews[myID].hallOrders = orders
 }
 
-func updatePeer	WorldviewFromNetwork(worldview Worldview, myID int) { // Ingrid
+func updatePeerWorldviewFromNetwork(worldview Worldview, myID int) { // Ingrid
 	/*
 	Får inn en worldview. Skal bruke IDen dens til å legge det inn i mappet. 
 	Skal også merke om en peer er død? Evt sende det på en annen channel
 	*/
 }
-
-
 
 
 // TODO
@@ -201,8 +147,8 @@ func GoroutineForWorldview(
 	syncToWorldviewCh      <-chan HallOrders,
 	networkToWorldviewCh   <-chan wordlview,
 	// TODO
-	networkToWorldviewNewPeerCh    <-chan string,
-	networkToWorldviewDeadPeerCh   <-chan string, 
+	newPeerIdCh   <-chan string, 
+	lostPeerIdCh    <-chan string,
 
 	worldviewToAssignerCh   chan<- map[int]Worldview
 	worldviewToSyncCh       chan<- map[int]Worldview
@@ -231,17 +177,50 @@ func GoroutineForWorldview(
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	
 		// Får inn at en peer lever
-	case: inputNewPeer := <-networkToWorldviewNewPeerCh
+	case: inputNewPeer := <-newPeerIdCh
 		// Må kjøre en funksjon
+
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	
 		// Får inn at en peer er død
-	case: inputDeadPeer := <-networkToWorldviewDeadPeerCh
+	case: inputDeadPeer := <-lostPeerIdCh
 		// Må kjøre en funksjon
 		// peerdead funksjonen må kjøres her et sted. 
+		HandleLostPeers(worldviewsMap, inputDeadPeer)
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	} 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //___________________________________________________________________________
 //------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
