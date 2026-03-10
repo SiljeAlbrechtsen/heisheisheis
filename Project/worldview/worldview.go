@@ -13,9 +13,11 @@ Finne ut hvordan man kan ha network alene. Altså at den ikke er main. Go-routin
 Være sikker på: håndterer vi button light contract? Når lys skrus på, er alle enige?
 Go-routine for sync kjøres hver gang den får inn noe på channel
 Samme med worldview
+Ligger hall_request_assigner i riktig mappe?
 
 Testing:
 Finne ut hva vi burde teste og hvordan?
+Teste en og en Go-routine? Da kan også noen feilsøke, mens andre fortsetter å kode
 
 EnkelHeisLogikk: (Alexsey)
 Modularisere koden og strukturere. Forslag: elevator – selve heistilstanden (etasje, retning, dør åpen/lukket, motor). controller / fsm – logikken som bestemmer hva heisen skal gjøre basert på tilstand og bestillinger.
