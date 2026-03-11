@@ -15,7 +15,7 @@ func main() {
 
 	go ButtonsListener(cabButtonCh, hallButtonCh)
 
-	requestCh := make(chan [fsm.N_FLOORS][fsm.N_BUTTONS]bool)
+	requestCh := make(chan [fsm.N_FLOORS][fsm.N_BUTTONS]bool, 1)
 	elevatorStateCh := make(chan fsm.ElevatorState)
 
 	go fsm.FSM2(requestCh, elevatorStateCh)
