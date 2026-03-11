@@ -32,8 +32,8 @@ const (
 )
 
 type ElevatorState struct {
-	floor     int
-	dirn      Direction
+	Floor     int
+	Dirn      Direction
 	behaviour Behaviour
 	requests  [N_FLOORS][N_BUTTONS]bool
 	config    struct {

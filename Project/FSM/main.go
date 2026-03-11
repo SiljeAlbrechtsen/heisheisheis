@@ -1,4 +1,4 @@
-package main
+package fsm
 
 //run
 //go run ./FSM

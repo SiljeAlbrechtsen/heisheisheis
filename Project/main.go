@@ -1,7 +1,6 @@
 package main
 
 import (
-	fsm "Project/FSM"
 	"Project/Network/setup"
 	assign "Project/assignment"
 	"Project/fsm"

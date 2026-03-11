@@ -2,7 +2,7 @@ package worldview
 
 import (
 	"strconv"
-	"Project/fsm"
+	"Project/FSM"
 
 )
 
@@ -52,10 +52,10 @@ type HallOrders [NumFloors][Directions]Order
 
 // Struct for egen worldview
 type Worldview struct {
-	idElevator  string
-	hallOrders  HallOrders
-	state       fsm.StateElevator  
-	mycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
+	IdElevator  string
+	HallOrders  HallOrders
+	State       fsm.ElevatorState  
+	MycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
 }	
 
 // _____________________________________________________________________________
@@ -103,11 +103,11 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId int) HallOrders {
 
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere state og
 //  ordre i worldview.
-func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fsm.StateElevator) Worldview {
+func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fsm.ElevatorState) Worldview {
     wv := worldview
     wv.state = inputStateElevator
-    floor := inputStateElevator.floor
-    dir := inputStateElevator.dir
+    floor := inputStateElevator.Floor
+    dir := inputStateElevator.Dirn
 
     if strconv.Itoa(wv.hallOrders[floor][dir].ownerID) == wv.idElevator {
         if wv.hallOrders[floor][dir].syncState == Confirmed {
@@ -132,7 +132,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
 
 func GoroutineForWorldview(
 	myID 						  string,
-	elevatorToWorldviewCh   <-chan fsm.StateElevator,
+	elevatorToWorldviewCh   <-chan fsm.ElevatorState,
 	syncToWorldviewCh       <-chan HallOrders,
 	networkToWorldviewCh    <-chan Worldview,
 
