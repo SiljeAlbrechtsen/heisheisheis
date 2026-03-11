@@ -4,14 +4,8 @@ package worldview
 TODO
 Lage setOwnerId. 
 Må LEGGE TIL Case fra channel fra assigner som kjører funk
-I assigner må vi ha funk som sender også til worldview.
 Assigner kjøres kontinuerlig, så vil den ta opp hele worldview eller går det bra
 Evt bare sende når noe endres. 
-
-
-Finne ut hvor disse funk skal stå. Sync?
--Sjekke om alle har en ordre som er på proposedDeleted -> Da skal den settes til No Order og No Owner og skru av lys via channel til FSM
--Må ha en funksjon som sjekker om alle har unconfirmed order -> Da skal den gjøre om til confirmed. Lys skal skru på via channel til FSM
 
 */
 

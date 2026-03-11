@@ -79,6 +79,13 @@ func syncHallOrders(
 				allAgree := true
 				for _, peer := range latestWorldviews {
 					if peer.hallOrders[f][d].syncState != wv.Unconfirmed {
+			
+			
+			
+			
+			
+			
+			
 						allAgree = false
 						break
 					}

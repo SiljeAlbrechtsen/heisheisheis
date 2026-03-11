@@ -151,7 +151,7 @@ func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan Elevator
 						UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)
 						elevio.SetMotorDirection(elevio.MD_Stop)
 						UpdateBehaviour(EB_DoorOpen, &elevatorState, elevatorStateCh)
-						time.Sleep(3000 * time.Millisecond) //TO DO fjerne hard constant
+						time.Sleep(3000 * time.Millisecond) //TODO fjerne hard constant
 						UpdateBehaviour(EB_Idle, &elevatorState, elevatorStateCh)
 						UpdateRequests([N_FLOORS][N_BUTTONS]bool{}, &elevatorState, elevatorStateCh)
 						break
@@ -174,22 +174,6 @@ func MoveToFloor2(currentFloor int, targetFloor int) Direction {
 	}
 	return D_Stop
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //////////////Test og hjelpe funksjoner kan slettes////////////////
 
