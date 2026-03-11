@@ -7,6 +7,7 @@ import (
 	assign "Project/assignment"
 	sync "Project/synchronization"
 	wv "Project/worldview"
+	"time"
 
 	//"flag"
 	"fmt"
@@ -90,7 +91,6 @@ func main() {
 }
 
 /*
-
 CHANNELS:
 
 updatedWorldviewToNetworkCh := make (chan Worldview)
@@ -107,6 +107,29 @@ lostPeerIdCh := makbuttonse (chan string)
 worldviewToNetworkCh := make (chan ap[string]TransferWorldview)
 worldviewToAssignerCh := make (chan map[int]Worldview)
 worldviewToSyncCh := make (chan map[int]Worldview)
-
-
 */
+func main2() {
+	elevatorToWorldviewCh := make(chan fsm.ElevatorState)
+	assignerToFsmCh := make(chan [4][3]bool) //Hardkodet ENDRE
+
+	//assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
+	fakeMap := [4][3]bool{
+		{false, false, false},
+		{false, false, false},
+		{false, true, false},
+		{false, false, false},
+	}
+
+	go fsm.FSM2(assignerToFsmCh, elevatorToWorldviewCh)
+
+	go func() {
+		for state := range elevatorToWorldviewCh {
+			fmt.Printf("Elevator state update: floor=%d dir=%d behaviour=%d\n", state.Floor, state.Dirn, state.Behaviour)
+		}
+	}()
+
+	for {
+		time.Sleep(5 * time.Second)
+		assignerToFsmCh <- fakeMap
+	}
+}

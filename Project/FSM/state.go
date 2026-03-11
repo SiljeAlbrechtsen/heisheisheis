@@ -69,7 +69,7 @@ func UpdateDirection(direction Direction, elevatorState *ElevatorState, elevator
 		return
 	}
 	elevio.SetMotorDirection(elevio.MotorDirection(direction))
-	elevatorState.dirn = direction
+	elevatorState.Dirn = direction
 	elevatorStateCh <- *elevatorState
 }
 
