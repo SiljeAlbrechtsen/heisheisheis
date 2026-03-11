@@ -2,6 +2,7 @@ package worldview
 
 import (
 	fsm "Project/FSM"
+	"fmt"
 	"strconv"
 )
 
@@ -20,7 +21,7 @@ Evt bare sende når noe endres.
 
 const (
 	Directions = 2
-	NumFloors  = 3
+	NumFloors  = 4
 )
 
 // Brukes til OwnerID
@@ -151,7 +152,11 @@ func GoroutineForWorldview(
 	worldviewsMap := make(map[string]Worldview)
 	myWorldview := worldviewsMap[myID]
 
+	fmt.Println(1)
+	fmt.Println(myWorldview)
+
 	for {
+		fmt.Println(2)
 		select {
 
 		// Får inn endring i stateElevator fra FSM. Oppdaterer worldview med ny state og oppdaterer fullførte ordre
@@ -184,11 +189,13 @@ func GoroutineForWorldview(
 
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
+			fmt.Println(myWorldview)
 			worldviewsMap[myID] = myWorldview
 
 			worldviewToNetworkCh <- worldviewsMap[myID]
 			worldviewToSyncCh <- worldviewsMap
 			// TODO Network, Sync, Assigner
+			fmt.Println(3)
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = addNewCabOrder(myWorldview, inputCabBtn)

@@ -49,7 +49,7 @@ func main() {
 
 	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
 
-	go hardware.ButtonsListener(cabBtnCh, hallBtnCh)
+	go hardware.ButtonsListener(cabBtnCh, hallBtnCh) // Good
 
 	go setup.TransmitWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
 
@@ -69,6 +69,12 @@ func main() {
 	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, lostPeerIdCh, cabBtnCh, hallBtnCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
 
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
+
+	go func() {
+		for {
+			<-assignerToWordviewCh // kanal som aldri blir brukt
+		}
+	}()
 
 	go fsm.FSM2(assignerToFsmCh, elevatorToWorldviewCh)
 
@@ -108,7 +114,7 @@ worldviewToNetworkCh := make (chan ap[string]TransferWorldview)
 worldviewToAssignerCh := make (chan map[int]Worldview)
 worldviewToSyncCh := make (chan map[int]Worldview)
 */
-func main2() {
+func main9() {
 	elevatorToWorldviewCh := make(chan fsm.ElevatorState)
 	assignerToFsmCh := make(chan [4][3]bool) //Hardkodet ENDRE
 

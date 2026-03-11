@@ -1,10 +1,10 @@
 package assignment
 
 import (
-	wv "Project/worldview"
 	fsm "Project/FSM"
-	"bytes"
+	wv "Project/worldview"
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"reflect"
 )
@@ -13,15 +13,15 @@ import (
 
 // Bytte navn?
 type hallRequestsInputJSON struct {
-	HallRequests [wv.NumFloors][wv.Directions]bool // TODO: Bytte navn på directions til NumDirections?
-	States       map[string]stateInputJSON
+	HallRequests [wv.NumFloors][wv.Directions]bool `json:"hallRequests"` // TODO: Bytte navn på directions til NumDirections?
+	States       map[string]stateInputJSON         `json:"states"`
 }
 
 type stateInputJSON struct {
-	Behaviour   string
-	Floor       int
-	Direction   string
-	CabRequests [wv.NumFloors]bool
+	Behaviour   string             `json:"behaviour"`
+	Floor       int                `json:"floor"`
+	Direction   string             `json:"direction"`
+	CabRequests [wv.NumFloors]bool `json:"cabRequests"`
 }
 
 func behaviourToString(b fsm.Behaviour) string {
@@ -97,10 +97,10 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (
 	}
 
 	// Sende til hall request assigner og få svar
-	cmd := exec.Command("./Project/assignment/hall_request_assigner")
-	cmd.Stdin = bytes.NewReader(jsonInput)
-	output, err := cmd.Output()
+	cmd := exec.Command("./assignment/hall_request_assigner", "-i", string(jsonInput))
+	output, err := cmd.CombinedOutput()
 	if err != nil {
+		fmt.Printf("assigner failed: %v, output: %s\n", err, string(output))
 		return nil, err
 	}
 
