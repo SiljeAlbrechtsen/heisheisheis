@@ -34,8 +34,8 @@ const (
 type ElevatorState struct {
 	Floor     int
 	Dirn      Direction
-	behaviour Behaviour
-	requests  [N_FLOORS][N_BUTTONS]bool
+	Behaviour Behaviour
+	Requests  [N_FLOORS][N_BUTTONS]bool
 	config    struct {
 		doorOpenDuration_s float64
 	}
@@ -45,9 +45,9 @@ func InitElevatorState() ElevatorState { //lager en state
 	addr := resolveElevatorAddr()
 	elevio.Init(addr, N_FLOORS)
 	return ElevatorState{
-		floor:     -1,
-		dirn:      D_Stop,
-		behaviour: EB_Idle,
+		Floor:     -1,
+		Dirn:      D_Stop,
+		Behaviour: EB_Idle,
 		config: struct {
 			doorOpenDuration_s float64
 		}{doorOpenDuration_s: 3.0},
@@ -57,33 +57,33 @@ func InitElevatorState() ElevatorState { //lager en state
 //////////////Opdater state og send til worldview/////////////////////
 
 func UpdateFloor(floor int, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	if elevatorState.floor == floor {
+	if elevatorState.Floor == floor {
 		return
 	}
-	elevatorState.floor = floor
+	elevatorState.Floor = floor
 	elevatorStateCh <- *elevatorState
 }
 
 func UpdateDirection(direction Direction, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	if elevatorState.dirn == direction {
+	if elevatorState.Dirn == direction {
 		return
 	}
-	elevatorState.dirn = direction
+	elevatorState.Dirn = direction
 	elevatorStateCh <- *elevatorState
 }
 
 func UpdateBehaviour(behaviour Behaviour, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	if elevatorState.behaviour == behaviour {
+	if elevatorState.Behaviour == behaviour {
 		return
 	}
-	elevatorState.behaviour = behaviour
+	elevatorState.Behaviour = behaviour
 	elevatorStateCh <- *elevatorState
 }
 
 func UpdateRequests(requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	if elevatorState.requests == requests {
+	if elevatorState.Requests == requests {
 		return
 	}
-	elevatorState.requests = requests
+	elevatorState.Requests = requests
 	elevatorStateCh <- *elevatorState
 }

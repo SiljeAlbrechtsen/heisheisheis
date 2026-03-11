@@ -3,7 +3,7 @@ package main
 import (
 	"Project/Network/setup"
 	assign "Project/assignment"
-	"Project/fsm"
+	"Project/FSM"
 	sync "Project/synchronization"
 	wv "Project/worldview"
 
@@ -34,7 +34,7 @@ func main() {
 	//From worldview
 	worldviewToAssignerCh := make(chan map[string]wv.Worldview)
 	worldviewToSyncCh     := make(chan map[string]wv.Worldview)
-	worldviewToNetworkCh  := make(chan map[string]wv.Worldview)
+	worldviewToNetworkCh  := make(chan wv.Worldview)
 
 	//From Sync 
 	lightOnCh             := make(chan [2]int)
@@ -44,7 +44,7 @@ func main() {
 	assignerToFsmCh       := make(chan [4][3]bool)  //Hardkodet ENDRE
 
 
-	peerUpdateCh, newPeerIdCh, lostPeerIdCh := setup.StartPeerDiscovery(id)
+	peerUpdateCh, _, lostPeerIdCh := setup.StartPeerDiscovery(id)
 
 	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
 
@@ -52,7 +52,7 @@ func main() {
 
 	go sync.GoRoutineSync(id, syncToWorldviewCh,worldviewToSyncCh, lightOnCh, lightsOffCh)
 
-	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh,syncToWorldviewCh,networkToWorldviewCh,newPeerIdCh,lostPeerIdCh,cabBtnCh,hallBtnCh,worldviewToAssignerCh,worldviewToSyncCh,worldviewToNetworkCh)
+	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh,syncToWorldviewCh,networkToWorldviewCh,lostPeerIdCh,cabBtnCh,hallBtnCh,worldviewToAssignerCh,worldviewToSyncCh,worldviewToNetworkCh)
 
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
 

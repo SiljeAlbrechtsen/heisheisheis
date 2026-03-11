@@ -44,24 +44,24 @@ func syncHallOrders(
 	lightsOnCh  chan<- [2]int,
 	lightsOffCh chan<- [2]int,
 ) wv.HallOrders {
-	myHallOrders := latestWorldviews[myID].hallOrders
+	myHallOrders := latestWorldviews[myID].HallOrders
 
 	// Steg 1: Følg peers som er ett steg foran
 	for _, peer := range latestWorldviews {
 		for f := 0; f < wv.NumFloors; f++ {
 			for d := 0; d < wv.Directions; d++ {
 				myCurrentOrder := myHallOrders[f][d]
-				peerCurrentOrder := peer.hallOrders[f][d]
+				peerCurrentOrder := peer.HallOrders[f][d]
 
 				if myCurrentOrder == peerCurrentOrder {
 					continue
 
 				// Hvis peer er på next order skal jeg også på next order
-				} else if nextOrderState(myCurrentOrder.syncState) == peerCurrentOrder.syncState {
+				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
 					myHallOrders[f][d] = peerCurrentOrder
 
 				// Hvis vi er på confirmed, peer er på unconfirmed, men har dødd skal vi også gå til unconfirmed.
-				} else if myCurrentOrder.syncState == nextOrderState(peerCurrentOrder.syncState) && peerCurrentOrder.ownerID == wv.PeerDied {
+				} else if myCurrentOrder.SyncState == nextOrderState(peerCurrentOrder.SyncState) && peerCurrentOrder.OwnerID == wv.PeerDied {
 					myHallOrders[f][d] = peerCurrentOrder
 				}
 			}
@@ -73,12 +73,12 @@ func syncHallOrders(
 		for d := 0; d < wv.Directions; d++ {
 			myOrder := myHallOrders[f][d]
 
-			switch myOrder.syncState {
+			switch myOrder.SyncState {
 
 			case wv.Unconfirmed:
 				allAgree := true
 				for _, peer := range latestWorldviews {
-					if peer.hallOrders[f][d].syncState != wv.Unconfirmed {
+					if peer.HallOrders[f][d].SyncState != wv.Unconfirmed {
 			
 			
 			
@@ -98,7 +98,7 @@ func syncHallOrders(
 			case wv.DeleteProposed:
 				allAgree := true
 				for _, peer := range latestWorldviews {
-					peerState := peer.hallOrders[f][d].syncState
+					peerState := peer.HallOrders[f][d].SyncState
 					if peerState != wv.DeleteProposed && peerState != wv.None {
 						allAgree = false
 						break

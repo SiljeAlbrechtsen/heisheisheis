@@ -17,14 +17,14 @@ func DebugRun() {
 
 	InitElevator(&elevatorState)
 
-	elevatorState.requests = [N_FLOORS][N_BUTTONS]bool{
+	elevatorState.Requests = [N_FLOORS][N_BUTTONS]bool{
 		{false, false, true},
 		{false, false, false},
 		{false, true, false},
 		{true, false, false},
 	}
 
-	//ClearFloorRequest(elevatorState.requests, &elevatorState)
+	//ClearFloorRequest(elevatorState.Requests, &elevatorState)
 
 	PrintElevatorState(elevatorState)
 
