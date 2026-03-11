@@ -117,8 +117,8 @@ func ServeFloor(elevator *ElevatorState) { //stopper åpner dør og venter i 3 s
 //Nye versjon, om denne funker kan alt over slettes
 
 func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan ElevatorState) { //Bruk denne funksjonen, Den kjører FSM og oppdater chan etter hver state update
-																						 //Kun testet på server så kan være bugs. FSM1 funker fint, men har ikke state updates så denne er mer relevant for vanlig testing
-																						 // Sjekk main i hardware for hvordan den brukes med chan
+	//Kun testet på server så kan være bugs. FSM1 funker fint, men har ikke state updates så denne er mer relevant for vanlig testing
+	// Sjekk main i hardware for hvordan den brukes med chan
 
 	elevatorState := InitElevatorState()
 
@@ -140,7 +140,6 @@ func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan Elevator
 
 			if targetFloor == -1 {
 				UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)
-				elevio.SetMotorDirection(elevio.MD_Stop)
 				UpdateBehaviour(EB_Idle, &elevatorState, elevatorStateCh)
 				continue
 			}
@@ -149,7 +148,6 @@ func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan Elevator
 				dir := MoveToFloor2(elevatorState.floor, targetFloor)
 				if dir != elevatorState.dirn {
 					UpdateDirection(dir, &elevatorState, elevatorStateCh)
-					elevio.SetMotorDirection(elevio.MotorDirection(dir))
 				}
 				if dir != D_Stop {
 					UpdateBehaviour(EB_Moving, &elevatorState, elevatorStateCh)
@@ -175,7 +173,6 @@ func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan Elevator
 
 			if elevatorState.floor == targetFloor {
 				UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)
-				elevio.SetMotorDirection(elevio.MD_Stop)
 
 				UpdateBehaviour(EB_DoorOpen, &elevatorState, elevatorStateCh)
 				elevio.SetDoorOpenLamp(true)
@@ -198,7 +195,6 @@ func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan Elevator
 			dir := MoveToFloor2(elevatorState.floor, targetFloor)
 			if dir != elevatorState.dirn {
 				UpdateDirection(dir, &elevatorState, elevatorStateCh)
-				elevio.SetMotorDirection(elevio.MotorDirection(dir))
 			}
 			if dir != D_Stop {
 				UpdateBehaviour(EB_Moving, &elevatorState, elevatorStateCh)
@@ -215,22 +211,6 @@ func MoveToFloor2(currentFloor int, targetFloor int) Direction {
 	}
 	return D_Stop
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //////////////Test og hjelpe funksjoner kan slettes////////////////
 
