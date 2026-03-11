@@ -254,18 +254,7 @@ func GoroutineForWorldview(
 		// Her må updatePeerWorldview ligge. Evt kan den bare inneholde det under. 
 		// TODO: Her må delete if all agree og confirm if all agree ligge. Burde de returnere true og da burde sende på channel med lys?
 		
-		// TODO: Burde dette være i en egen funksjon?
-		updatedOrders, confirmed := confirmIfAllAgree(worldviewsMap, myID)
-		if confirmed {
-			worldviewsMap[myID].hallOrders = updatedOrders
-			hallLightsCh <- updatedOrders  // skru PÅ lys
-		}
-		
-		updatedOrders, deleted := deleteIfAllAgree(worldviewsMap, myID)
-		if deleted {
-			worldviewsMap[myID].hallOrders = updatedOrders
-			hallLightsCh <- updatedOrders  // skru AV lys
-		}
+	
 
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	
