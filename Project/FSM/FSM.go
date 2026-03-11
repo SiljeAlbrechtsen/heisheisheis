@@ -129,6 +129,9 @@ func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan Elevator
 				UpdateRequests(newRequests, &elevatorState, elevatorStateCh)
 
 				targetFloor := FindFloorFromRequest(elevatorState.Requests)
+				if targetFloor == -1 {
+					break
+				}
 				for {
 					sensorFloor := elevio.GetFloor()
 					if sensorFloor != -1 {

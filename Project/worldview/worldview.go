@@ -102,22 +102,35 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	return ho	
 }
 
+func dirToIndex(d fsm.Direction) int {
+    if d == fsm.D_Up {
+        return 0
+    }
+    return 1
+}
+
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere state og
 //  ordre i worldview.
 func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fsm.ElevatorState) Worldview {
     wv := worldview
     wv.State = inputStateElevator
     floor := inputStateElevator.Floor
-    dir := inputStateElevator.Dirn
 
+    if wv.MycabOrders[floor] == true {
+        wv.MycabOrders[floor] = false
+    }
+
+    if inputStateElevator.Dirn == fsm.D_Stop {
+        return wv
+    }
+
+    dir := dirToIndex(inputStateElevator.Dirn)
     if strconv.Itoa(wv.HallOrders[floor][dir].OwnerID) == wv.IdElevator {
         if wv.HallOrders[floor][dir].SyncState == Confirmed {
             wv.HallOrders[floor][dir].SyncState = DeleteProposed
         }
     }
-    if wv.MycabOrders[floor] == true {
-        wv.MycabOrders[floor] = false
-    }
+
     return wv
 }
 
