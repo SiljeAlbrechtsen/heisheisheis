@@ -272,6 +272,7 @@ func GoroutineForWorldview(
 		// Får inn at en peer lever
 	case inputNewPeer := <-newPeerIdCh
 		// Må kjøre en funksjon
+		updatePeerWorldviewFromNetwork(worldviewsMap, )
 
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	
@@ -279,7 +280,7 @@ func GoroutineForWorldview(
 	case inputDeadPeer := <-lostPeerIdCh
 		// Må kjøre en funksjon
 		// peerdead funksjonen må kjøres her et sted. 
-		HandleLostPeers(worldviewsMap, inputDeadPeer)
+		HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
 		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
 	
 	case 
@@ -348,7 +349,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-cha
 }
 
 // Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
-func SetNodeDeadInMap(latestWorldviews map[int]Worldview, lostID int){
+func HandleLostPeer(latestWorldviews map[int]Worldview, myID int, lostID int){
 	lwv := latestWorldviews
 	///lwv[lostID].state = dead  ???
     wv := lwv[myID]
