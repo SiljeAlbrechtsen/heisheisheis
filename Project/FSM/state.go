@@ -2,7 +2,10 @@ package fsm
 
 import (
 	elevio "Project/Driver"
+	"sync"
 )
+
+var initDriverOnce sync.Once
 
 const N_FLOORS = 4
 const N_BUTTONS = 3
@@ -43,7 +46,9 @@ type ElevatorState struct {
 
 func InitElevatorState() ElevatorState { //lager en state
 	addr := resolveElevatorAddr()
-	elevio.Init(addr, N_FLOORS)
+	initDriverOnce.Do(func() {
+		elevio.Init(addr, N_FLOORS)
+	})
 	return ElevatorState{
 		Floor:     -1,
 		Dirn:      D_Stop,

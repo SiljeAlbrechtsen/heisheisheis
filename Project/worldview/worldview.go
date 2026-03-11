@@ -57,6 +57,14 @@ type Worldview struct {
 	MycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
 }
 
+func snapshotWorldviews(src map[string]Worldview) map[string]Worldview { //Chat la till,
+	dst := make(map[string]Worldview, len(src))
+	for id, worldview := range src {
+		dst[id] = worldview
+	}
+	return dst
+}
+
 // _____________________________________________________________________________
 // ----------FUNKSJONER FOR Å TA IMOT OG HÅNDTERE DATA FRA ANDRE MODULER--------
 // _____________________________________________________________________________
@@ -150,13 +158,14 @@ func GoroutineForWorldview(
 	// Pass på at channelsene bare sender inn når det skjer en endring, slik at de ikke blokkerer
 	// TODO må også skaffe logikk med når peer er død at den ikke tas med i beregninger i sync og assigner. Egen activ state i worldview
 	worldviewsMap := make(map[string]Worldview)
-	myWorldview := worldviewsMap[myID]
+	myWorldview := Worldview{IdElevator: myID}
+	worldviewsMap[myID] = myWorldview
 
 	fmt.Println(1)
 	fmt.Println(myWorldview)
 
 	for {
-		fmt.Println(2)
+		fmt.Println("Worldview")
 		select {
 
 		// Får inn endring i stateElevator fra FSM. Oppdaterer worldview med ny state og oppdaterer fullførte ordre
@@ -164,27 +173,30 @@ func GoroutineForWorldview(
 			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator) // ingrid hjelp
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToSyncCh <- worldviewsMap
+			worldviewToSyncCh <- snapshotWorldviews(worldviewsMap)
 
 			// Får inn syncet hallorders fra sync. Den må da oppdatere worldview også sende den oppdaterte til andre moduler
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
+			myWorldview = worldviewsMap[myID]
 			// TODO Trenger ikke sende til sync
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToAssignerCh <- worldviewsMap // Sender bare til Assigner her?
+			worldviewToAssignerCh <- snapshotWorldviews(worldviewsMap) // Sender bare til Assigner her? //Chat endret la til snapshot
 
 		// Får inn en peers worldview. Må Oppdatere map og sende til andre moduler
 		case inputPeerWorldview := <-networkToWorldviewCh:
 			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
+			myWorldview = worldviewsMap[myID]
 			// TODO Bare Sync trenger denne info
-			worldviewToSyncCh <- worldviewsMap
+			worldviewToSyncCh <- snapshotWorldviews(worldviewsMap) //Chat endret
 
 		// Får inn at en peer er død
 		case inputDeadPeer := <-lostPeerIdCh:
 			// TODO: Hvordan sette node død?
 			// peerdead funksjonen må kjøres her et sted.
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
-			worldviewToSyncCh <- worldviewsMap
+			myWorldview = worldviewsMap[myID]
+			worldviewToSyncCh <- snapshotWorldviews(worldviewsMap) //Chat endret
 			// Sync + assigner
 
 		case inputHallBtn := <-hallBtnCh:
@@ -193,7 +205,7 @@ func GoroutineForWorldview(
 			worldviewsMap[myID] = myWorldview
 
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToSyncCh <- worldviewsMap
+			worldviewToSyncCh <- snapshotWorldviews(worldviewsMap) //Chat endret
 			// TODO Network, Sync, Assigner
 			fmt.Println(3)
 
@@ -202,7 +214,7 @@ func GoroutineForWorldview(
 			worldviewsMap[myID] = myWorldview
 
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToAssignerCh <- worldviewsMap
+			worldviewToAssignerCh <- snapshotWorldviews(worldviewsMap)
 
 			// TODO Network, Sync, Assigner
 
@@ -259,6 +271,9 @@ func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID s
 
 func addNewCabOrder(worldview Worldview, inputCabBtn int) Worldview {
 	wv := worldview
+	if inputCabBtn < 0 || inputCabBtn >= NumFloors {
+		return wv
+	}
 
 	wv.MycabOrders[inputCabBtn] = true
 
@@ -270,6 +285,12 @@ func addNewHallOrder(worldview Worldview, inputHallBtn [2]int) Worldview {
 
 	floor := inputHallBtn[0]
 	dir := inputHallBtn[1]
+	if floor < 0 || floor >= NumFloors {
+		return wv
+	}
+	if dir < 0 || dir >= Directions {
+		return wv
+	}
 
 	order := wv.HallOrders[floor][dir]
 

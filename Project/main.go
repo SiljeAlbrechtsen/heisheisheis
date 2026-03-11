@@ -26,28 +26,30 @@ func main() {
 	// Må gjøre worldview private
 
 	//To worldview
-	elevatorToWorldviewCh := make(chan fsm.ElevatorState)
-	syncToWorldviewCh := make(chan wv.HallOrders)
-	networkToWorldviewCh := make(chan wv.Worldview)
-	assignerToWordviewCh := make(chan map[string][4][3]bool)
-	cabBtnCh := make(chan int)
-	hallBtnCh := make(chan [2]int)
+	elevatorToWorldviewCh := make(chan fsm.ElevatorState, 16)
+	syncToWorldviewCh := make(chan wv.HallOrders, 16)
+	networkToWorldviewCh := make(chan wv.Worldview, 16)
+	assignerToWordviewCh := make(chan map[string][4][3]bool, 16)
+	cabBtnCh := make(chan int, 16)
+	hallBtnCh := make(chan [2]int, 16)
 
 	//From worldview
-	worldviewToAssignerCh := make(chan map[string]wv.Worldview)
-	worldviewToSyncCh := make(chan map[string]wv.Worldview)
-	worldviewToNetworkCh := make(chan wv.Worldview)
+	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 16)
+	worldviewToSyncCh := make(chan map[string]wv.Worldview, 16)
+	worldviewToNetworkCh := make(chan wv.Worldview, 16)
 
 	//From Sync
-	lightOnCh := make(chan [2]int)
-	lightsOffCh := make(chan [2]int)
+	lightOnCh := make(chan [2]int, 16)
+	lightsOffCh := make(chan [2]int, 16)
 
 	// From assigner
-	assignerToFsmCh := make(chan [4][3]bool) //Hardkodet ENDRE
+	assignerToFsmCh := make(chan [4][3]bool, 16) //Hardkodet ENDRE
 
 	peerUpdateCh, _, lostPeerIdCh := setup.StartPeerDiscovery(id)
 
 	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
+
+	_ = fsm.InitElevatorState()
 
 	go hardware.ButtonsListener(cabBtnCh, hallBtnCh) // Good
 
@@ -139,3 +141,13 @@ func main9() {
 		assignerToFsmCh <- fakeMap
 	}
 }
+
+
+/*
+Suggested next hardening
+
+Keep channels buffered for pipeline stages.
+Optionally use non-blocking send for telemetry-like updates (network/sync snapshots) if freshness is more important than delivery of every intermediate state.
+Remove temporary debug prints in worldview/FSM once stable so logs show real stalls clearly.
+If you want, I can do one more pass to make worldview fan-out explicitly non-blocking (drop stale updates safely) so this cannot lock under load.
+*/
