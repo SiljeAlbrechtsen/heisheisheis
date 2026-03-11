@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os/exec"
 	"reflect"
-	"strconv"
 	wv "Project/worldview"
 )
 
@@ -47,13 +46,13 @@ func convertHallOrdersToBool(hallOrders wv.HallOrders) [wv.NumFloors][wv.Directi
 }
 
 // Hjelpefunksjon
-func buildInputHallRequestAssigner(latestWorldviews map[int]wv.Worldview, MyID int) hallRequestsInputJSON {
+func buildInputHallRequestAssigner(latestWorldviews map[string]wv.Worldview, MyID string) hallRequestsInputJSON {
     // Hent hall requests fra egen worldview
     hallRequests := convertHallOrdersToBool(latestWorldviews[MyID].hallOrders)
 
     states := make(map[string]stateInputJSON)
     for id, worldview := range latestWorldviews {
-        states[strconv.Itoa(id)] = buildState(worldview)
+        states[id] = buildState(worldview)
     }
 
     return hallRequestsInputJSON{
@@ -62,13 +61,13 @@ func buildInputHallRequestAssigner(latestWorldviews map[int]wv.Worldview, MyID i
     }
 }
 
-func convertWorldviewToJSON(latestWorldviews map[int]wv.Worldview, MyID int) ([]byte, error) {
+func convertWorldviewToJSON(latestWorldviews map[string]wv.Worldview, MyID string) ([]byte, error) {
     input := buildInputHallRequestAssigner(latestWorldviews, MyID)
     return json.MarshalIndent(input, "", "\t")
 }
 
 // Eller bare assignRequests, siden den sier noe om caborders også?
-func assignHallRequests(latestWorldviews map[int]wv.Worldview, MyID int) (map[string][][]bool, error) {
+func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (map[string][][]bool, error) {
 	jsonInput, err := convertWorldviewToJSON(latestWorldviews, MyID)
 	if err != nil {
 		return nil, err
@@ -93,8 +92,8 @@ func assignHallRequests(latestWorldviews map[int]wv.Worldview, MyID int) (map[st
 
 // GO routine
 func RunHallRequestAssigner(
-	myID int,
-	worldviewToAssignerCh <-chan map[int]wv.Worldview,
+	myID string,
+	worldviewToAssignerCh <-chan map[string]wv.Worldview,
 	assignerToFsmCh chan<- [][]bool,
 	assignerToWordviewCh chan<- map[string][][]bool,
 ) {
@@ -105,7 +104,7 @@ func RunHallRequestAssigner(
 		if err != nil {
 			continue
 		}
-		assignerToFsmCh <- result[strconv.Itoa(myID)]
+		assignerToFsmCh <- result[myID]
 		// reflect.DeepEqual er med i standard bib. i go og brukes for å sammenligne maps.
 		if !reflect.DeepEqual(result, lastResult) {
 			assignerToWordviewCh <- result

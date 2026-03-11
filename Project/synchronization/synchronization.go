@@ -17,7 +17,7 @@ import (
 //----------------  FUNKSJONER FOR Å HÅNDTERE WORLDVIEW ------------------------------------------------------
 //____________________________________________________________________________________________________________
 
-func nextOrderState(currentSyncState wv.orderSyncState) wv.orderSyncState {
+func nextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 	switch currentSyncState {
 
 	case wv.None:
@@ -39,8 +39,8 @@ func nextOrderState(currentSyncState wv.orderSyncState) wv.orderSyncState {
 
 // Trigges når vi får inn nye worldviews. Synkroniserer hall orders og sender på channel når lys skal skrus på/av.
 func syncHallOrders(
-	latestWorldviews map[int]wv.Worldview,
-	myID int,
+	latestWorldviews map[string]wv.Worldview,
+	myID string,
 	lightsOnCh  chan<- [2]int,
 	lightsOffCh chan<- [2]int,
 ) wv.HallOrders {
@@ -121,9 +121,9 @@ func syncHallOrders(
 // _______________________________________________________
 
 func goRoutineSync(
-	myID              int,
+	myID              string,
 	syncToWorldviewCh chan<- wv.HallOrders,
-	worldviewToSyncCh <-chan map[int]wv.Worldview,
+	worldviewToSyncCh <-chan map[string]wv.Worldview,
 	lightsOnCh        chan<- [2]int,
 	lightsOffCh       chan<- [2]int,
 ) {
