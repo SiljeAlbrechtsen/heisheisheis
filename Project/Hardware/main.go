@@ -1,13 +1,7 @@
-package main
+package hardware
 
-import (
-	fsm "Project/FSM"
-	"fmt"
-
-	elevio "Project/Driver"
-)
-
-func main() {
+/*
+func test99() {
 	requests := [fsm.N_FLOORS][fsm.N_BUTTONS]bool{}
 
 	cabButtonCh := make(chan int)
@@ -39,3 +33,4 @@ func main() {
 	}
 
 }
+*/

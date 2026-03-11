@@ -21,7 +21,7 @@ Evt bare sende når noe endres.
 //______________________________________________________________________________________________________
 
 const (
-	Directions = 1
+	Directions = 2
 	NumFloors  = 3
 )
 

@@ -1,4 +1,4 @@
-package main
+package hardware
 
 //cabButtonCh
 //hallButtonCh
@@ -8,7 +8,7 @@ import (
 	"fmt"
 )
 
-func ButtonsListener(cabButtonCh chan int, hallButtonCh chan elevio.ButtonEvent) {
+func ButtonsListener(cabButtonCh chan int, hallButtonCh chan [2]int) {
 
 	elevioButtonCh := make(chan elevio.ButtonEvent)
 	go elevio.PollButtons(elevioButtonCh)
@@ -19,7 +19,8 @@ func ButtonsListener(cabButtonCh chan int, hallButtonCh chan elevio.ButtonEvent)
 			if a.Button == elevio.BT_Cab {
 				cabButtonCh <- a.Floor
 			} else {
-				hallButtonCh <- a
+				result := [2]int{a.Floor, int(a.Button)}
+				hallButtonCh <- result
 			}
 			fmt.Println(a)
 		}
