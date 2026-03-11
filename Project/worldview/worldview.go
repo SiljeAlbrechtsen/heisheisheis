@@ -218,20 +218,22 @@ func deleteIfAllAgree(worldviewsMap map[int]Worldview, myID int) (HallOrders, bo
 
 func GoroutineForWorldview(
 	myID 						  int,
-	elevatorToWorldviewCh  <-chan StateElevator,
-	syncToWorldviewCh      <-chan HallOrders,
-	networkToWorldviewCh   <-chan Wordlview,
+	elevatorToWorldviewCh   <-chan StateElevator,
+	syncToWorldviewCh       <-chan HallOrders,
+	networkToWorldviewCh    <-chan Worldview,
 	// TODO
-	newPeerIdCh   <-chan string, 
-	lostPeerIdCh    <-chan string,
-
-	worldviewToAssignerCh   chan<- map[int]TransferWorldview,
+	newPeerIdCh   			<-chan int, 
+	lostPeerIdCh    		<-chan int,
+	cabBtnCh 				<-chan int,
+	cabHallBtnchan			<-chan [2]int,
+	
+	worldviewToAssignerCh   chan<- map[int]Worldview,
 	worldviewToSyncCh       chan<- map[int]Worldview,
-	worldviewToNetworkCh    chan<- map[string]worldview,
+	worldviewToNetworkCh    chan<- map[int]Worldview,
 	) { 
 // NB!!!
 // Pass på at channelsene bare sender inn når det skjer en endring, slik at de ikke blokkerer
-	
+	// TODO må også skaffe logikk med når peer er død at den ikke tas med i beregninger i sync og assigner. Egen activ state i worldview
 	worldviewsMap := make(map[int]Worldview)
 	myWorldview := worldviewsMap[myID]
 
@@ -240,40 +242,66 @@ func GoroutineForWorldview(
 		
 		// Får inn endring i stateElevator fra FSM. Oppdaterer worldview med ny state og oppdaterer fullførte ordre
 		case inputStateElevator := <-elevatorToWorldviewCh:
-			myWorldview = updateWorldviewWithElevatorState(ourWorldview, inputStateElevator) // ingrid hjelp
+			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator) // ingrid hjelp
 			worldviewsMap[myID] = myWorldview
-			sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
-		
-		
-		
+			worldviewToNetworkCh <- worldviewsMap
+			worldviewToSyncCh <- worldviewsMap
+			
+
 	// Får inn syncet hallorders fra sync. Den må da oppdatere worldview også sende den oppdaterte til andre moduler
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
-			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputHallOrders, myID)
-			sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
+			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
+			// TODO Trenger ikke sende til sync
+			worldviewToNetworkCh <- worldviewsMap
+			worldviewToAssignerCh <- worldviewsMap // Sender bare til Assigner her?
+
 		
 		// Får inn en peers worldview. Må Oppdatere map og sende til andre moduler
 		case inputPeerWorldview := <-networkToWorldviewCh:
 			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
-			sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
-		
+			// TODO Bare Sync trenger denne info
+			worldviewToSyncCh <- worldviewsMap
+			
+
+
+
 		// Får inn at en peer lever
-		// TODO: Sette disse to sammen og bruke samme channel
+		// TODO: Sette disse to sammen og bruke samme channel?
 		case inputNewPeer := <-newPeerIdCh:
 			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputNewPeer)
-			sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
-		
+			worldviewToSyncCh <- worldviewsMap
+			// TODO: Assigner + Sync
+
 		// Får inn at en peer er død
 		case inputDeadPeer := <-lostPeerIdCh:
 			// TODO: Hvordan sette node død?
 			// peerdead funksjonen må kjøres her et sted. 
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
-			sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
-		
-		case 
+			worldviewToSyncCh <- worldviewsMap
+			// Sync + assigner 
+
+
+		case inputHallBtn := <-hallBtnCh:
+			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
+			worldviewsMap[myID] = myWorldview
+			
+			worldviewToNetworkCh <- worldviewsMap
+			worldviewToSyncCh <- worldviewsMap
+			// TODO Network, Sync, Assigner
+
+		case inputCabBtn := <-cabBtnCh:
+			myWorldview = addNewCabOrder(myWorldview, inputCabBtn)
+			worldviewsMap[myID] = myWorldview
+
+			worldviewToNetworkCh <- worldviewsMap
+			worldviewToAssignerCh <- worldviewsMap
+				
+		// TODO Network, Sync, Assigner
+
 			}
 		} 
 	}
-
+// Vi har gjort det slik at alt som skal til assigner går først innom sync.
 
 
 
@@ -367,24 +395,27 @@ func HandleLostPeer(latestWorldviews map[int]Worldview, myID int, lostID int) ma
 	return lwv
 }
 
-func addNewCabOrder(wordview Worldview, cabButtonCh chan int) {
+func addNewCabOrder(worldview Worldview, inputCabBtn int) Worldview{
 	wv := worldview
-	cabBtn := <- cabButtonCh
 
-	wv.cabOrders[cabBtn] = true
+	wv.mycabOrders[inputCabBtn] = true
+
+	return wv
 }
 
-func addNewHallOrder(wordview, hallButtonCh chan [2]int) {
+func addNewHallOrder(worldview 	Worldview, inputHallBtn [2]int) Worldview {
 	wv := worldview
-	hallBtn := <- hallButtonCh
 
-	floor := hallBtn[0]
-	dir := hallbtn[1]
+	floor := inputHallBtn[0]
+	dir := inputHallBtn[1]
 
 	order := wv.hallOrders[floor][dir]
 
 	order.syncState = Unconfirmed
 	order.ownerID = noOwner
 
+	wv.hallOrders[floor][dir] = order
+
+	return wv
 }
 
