@@ -82,7 +82,10 @@ func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
 			fmt.Printf("  Lost:  %q\n", update.Lost)
 
 			if update.New != "" {
-				newPeerIdCh <- update.New
+				select {
+				case newPeerIdCh <- update.New: // endret: non-blocking
+				default:
+				}
 			}
 
 			for _, lostId := range update.Lost {

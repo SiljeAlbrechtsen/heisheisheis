@@ -41,8 +41,13 @@ De fungerer ved at de "leser av en jobbkø" elns
       → FSM prøver å sende etasjeoppdatering til worldview                                                                                                                                                      
       → Worldview kan ikke motta (blokkert) → FSM blokkerer                                                                                                                                                     
       → DEADLOCK                                                                                                                                                                                                
-                  
+Fikset med buffret channel 
 
+
+  Bug: elevio.SetMotorDirection kalles aldri i FSM2 
+FSM/FSM.go — elevio.SetMotorDirection aldri kalt i FSM2                                                                                                                                                    
+  UpdateDirection oppdaterer bare intern state og sender til worldview — den starter ikke motoren fysisk. Lagt til SetMotorDirection-kall på fire steder: når ingen ordre, når retning settes fra               
+  requests-casen, ved ankomst, og når retning settes fra floorTicker-casen. 
   */
 
 
@@ -147,6 +152,10 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
     wv := worldview
     wv.State = inputStateElevator
     floor := inputStateElevator.Floor
+
+    if floor < 0 || floor >= NumFloors { // endret: guard mot floor = -1
+        return wv
+    }
 
     if wv.MycabOrders[floor] == true {
         wv.MycabOrders[floor] = false
