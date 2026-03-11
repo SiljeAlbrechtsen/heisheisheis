@@ -1,11 +1,13 @@
 package main
 
 import (
+	fsm "Project/FSM"
 	"Project/Network/setup"
-	wv "Project/worldview"
 	assign "Project/assignment"
-	sync "Project/synchronization"
 	"Project/fsm"
+	sync "Project/synchronization"
+	wv "Project/worldview"
+
 	//"flag"
 	"fmt"
 	//"os"
@@ -23,12 +25,10 @@ func main() {
     // Må gjøre worldview private 
 
 	//To worldview
-	elevatorToWorldviewCh := make(chan fsm.StateElevator)
+	elevatorToWorldviewCh := make(chan fsm.ElevatorState)
 	syncToWorldviewCh 	  := make(chan wv.HallOrders)
 	networkToWorldviewCh  := make(chan wv.Worldview)
-	assignerToWordviewCh  := make(chan map[string][][]bool)
-	newPeerIdCh 		  := make(chan string)
-	lostPeerIdCh		  := make(chan string)
+	assignerToWordviewCh  := make(chan map[string][4][3]bool)
 	cabBtnCh			  := make(chan int)
 	hallBtnCh			  := make(chan [2]int)
 
@@ -42,7 +42,7 @@ func main() {
 	lightsOffCh			  := make(chan [2]int)
 
 	// From assigner
-	assignerToFsmCh       := make(chan [][]bool)
+	assignerToFsmCh       := make(chan [4][3]bool)  //Hardkodet ENDRE
 
 
 	peerUpdateCh, newPeerIdCh, lostPeerIdCh := setup.StartPeerDiscovery(id)
@@ -56,6 +56,8 @@ func main() {
 	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh,syncToWorldviewCh,networkToWorldviewCh,newPeerIdCh,lostPeerIdCh,cabBtnCh,hallBtnCh,worldviewToAssignerCh,worldviewToSyncCh,worldviewToNetworkCh)
 
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
+
+	go fsm.FSM2(assignerToFsmCh,elevatorToWorldviewCh)
 
 	fmt.Println("Started")
 	for {

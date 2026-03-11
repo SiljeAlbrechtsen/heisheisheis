@@ -4,6 +4,7 @@ import (
 	"Project/Network/bcast"
 	"Project/Network/localip"
 	"Project/Network/peers"
+	wv "Project/worldview"
 	"flag"
 	"fmt"
 	"os"
@@ -17,7 +18,7 @@ import (
 //  will be received as zero-values.
 
 // Tar inn vår worldview og kanalen vi skal sende på, og legger periodisk worldview inn på tx-kanalen
-func TransmitWorldviewPeriodically(worldviewTx chan<- Worldview, worldviewToNetworkCh <-chan Worldview) {
+func TransmitWorldviewPeriodically(worldviewTx chan<- wv.Worldview, worldviewToNetworkCh <-chan wv.Worldview) {
 	WorldviewMsg := <-worldviewToNetworkCh
 
 	for {
@@ -34,7 +35,7 @@ func TransmitWorldviewPeriodically(worldviewTx chan<- Worldview, worldviewToNetw
 }
 
 // Tar inn worldviewen vi mottar på Rx og setter den på kanalen som sender til worldview
-func ForwardWorldviewFromNetwork(worldviewRx <-chan Worldview, networkToWorldviewCh chan<- Worldview) {
+func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorldviewCh chan<- wv.Worldview) {
 	for {
 		wv := <-worldviewRx
 		networkToWorldviewCh <- wv
@@ -90,10 +91,10 @@ func StartPeerDiscovery(id string) (<-chan peers.PeerUpdate, <-chan string, <-ch
 	return peerUpdateCh, newPeerIdCh, lostPeerIdCh
 }
 
-func SetupWorldviewNetwork() (chan<- Worldview, <-chan Worldview) {
+func SetupWorldviewNetwork() (chan<- wv.Worldview, <-chan wv.Worldview) {
 	// We make channels for sending and receiving our custom data types
-	worldviewTx := make(chan Worldview)
-	worldviewRx := make(chan Worldview)
+	worldviewTx := make(chan wv.Worldview)
+	worldviewRx := make(chan wv.Worldview)
 
 	// And start the transmitter/receiver pair on some port
 	go bcast.Transmitter(10002, worldviewTx)

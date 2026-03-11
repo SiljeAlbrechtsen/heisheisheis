@@ -1,36 +1,36 @@
 package assignment
 
 import (
+	wv "Project/worldview"
 	"bytes"
 	"encoding/json"
 	"os/exec"
 	"reflect"
-	wv "Project/worldview"
 )
 
 // TODO: Dårlig kodekvalitet å bruke myID i alle?
 
 // Bytte navn?
-type hallRequestsInputJSON struct { 
+type hallRequestsInputJSON struct {
 	HallRequests [wv.NumFloors][wv.Directions]bool // TODO: Bytte navn på directions til NumDirections?
-	States       map[string]stateInputJSON 
+	States       map[string]stateInputJSON
 }
 
-type stateInputJSON  struct {
-	Behaviour   string           
-	Floor       int              
-	Direction   string           
-	CabRequests [wv.NumFloors]bool  
+type stateInputJSON struct {
+	Behaviour   string
+	Floor       int
+	Direction   string
+	CabRequests [wv.NumFloors]bool
 }
 
 // Hjelpefunksjon
-func buildState(worldview wv.Worldview) stateInputJSON{
-	 return stateInputJSON{
-        Behaviour:   worldview.state.Behaviour,
-        Floor:       worldview.state.Floor,
-        Direction:   worldview.state.Direction,
-        CabRequests: worldview.mycabOrders, 
-    }
+func buildState(worldview wv.Worldview) stateInputJSON {
+	return stateInputJSON{
+		Behaviour:   worldview.state.Behaviour,
+		Floor:       worldview.state.Floor,
+		Direction:   worldview.state.Direction,
+		CabRequests: worldview.mycabOrders,
+	}
 }
 
 // Hjelpefunksjon
@@ -47,27 +47,27 @@ func convertHallOrdersToBool(hallOrders wv.HallOrders) [wv.NumFloors][wv.Directi
 
 // Hjelpefunksjon
 func buildInputHallRequestAssigner(latestWorldviews map[string]wv.Worldview, MyID string) hallRequestsInputJSON {
-    // Hent hall requests fra egen worldview
-    hallRequests := convertHallOrdersToBool(latestWorldviews[MyID].hallOrders)
+	// Hent hall requests fra egen worldview
+	hallRequests := convertHallOrdersToBool(latestWorldviews[MyID].hallOrders)
 
-    states := make(map[string]stateInputJSON)
-    for id, worldview := range latestWorldviews {
-        states[id] = buildState(worldview)
-    }
+	states := make(map[string]stateInputJSON)
+	for id, worldview := range latestWorldviews {
+		states[id] = buildState(worldview)
+	}
 
-    return hallRequestsInputJSON{
-        HallRequests: hallRequests,
-        States:       states,
-    }
+	return hallRequestsInputJSON{
+		HallRequests: hallRequests,
+		States:       states,
+	}
 }
 
 func convertWorldviewToJSON(latestWorldviews map[string]wv.Worldview, MyID string) ([]byte, error) {
-    input := buildInputHallRequestAssigner(latestWorldviews, MyID)
-    return json.MarshalIndent(input, "", "\t")
+	input := buildInputHallRequestAssigner(latestWorldviews, MyID)
+	return json.MarshalIndent(input, "", "\t")
 }
 
 // Eller bare assignRequests, siden den sier noe om caborders også?
-func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (map[string][][]bool, error) {
+func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (map[string][4][3]bool, error) {
 	jsonInput, err := convertWorldviewToJSON(latestWorldviews, MyID)
 	if err != nil {
 		return nil, err
@@ -82,22 +82,20 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (
 	}
 
 	// Pakke ut JSON. Evt i annen funk?
-	var result map[string][][]bool
+	var result map[string][4][3]bool
 	err = json.Unmarshal(output, &result)
 
-	return result, nil 
+	return result, nil
 }
-
-
 
 // GO routine
 func RunHallRequestAssigner(
 	myID string,
 	worldviewToAssignerCh <-chan map[string]wv.Worldview,
-	assignerToFsmCh chan<- [][]bool,
-	assignerToWordviewCh chan<- map[string][][]bool,
+	assignerToFsmCh chan<- [4][3]bool,
+	assignerToWordviewCh chan<- map[string][4][3]bool,
 ) {
-	var lastResult map[string][][]bool
+	var lastResult map[string][4][3]bool
 	for {
 		latestWorldviews := <-worldviewToAssignerCh
 		result, err := assignHallRequests(latestWorldviews, myID)
