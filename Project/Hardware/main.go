@@ -8,8 +8,6 @@ import (
 )
 
 func main() {
-	elevatorState := fsm.InitElevatorState()
-	fsm.InitElevator(&elevatorState)
 	requests := [fsm.N_FLOORS][fsm.N_BUTTONS]bool{}
 
 	cabButtonCh := make(chan int)
@@ -18,8 +16,9 @@ func main() {
 	go ButtonsListener(cabButtonCh, hallButtonCh)
 
 	requestCh := make(chan [fsm.N_FLOORS][fsm.N_BUTTONS]bool)
+	elevatorStateCh := make(chan fsm.ElevatorState)
 
-	go fsm.FSM(requestCh)
+	go fsm.FSM2(requestCh, elevatorStateCh)
 
 	for {
 		select {
@@ -33,6 +32,9 @@ func main() {
 			requests = fsm.UpdateRequest(requests, a.Floor, a.Button)
 			requestCh <- requests
 			requests = [fsm.N_FLOORS][fsm.N_BUTTONS]bool{}
+
+		case b := <-elevatorStateCh:
+			fmt.Printf("Elevator state updated: %+v\n", b)
 		}
 	}
 

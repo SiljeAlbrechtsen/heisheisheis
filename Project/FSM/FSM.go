@@ -113,6 +113,84 @@ func ServeFloor(elevator *ElevatorState) { //stopper åpner dør og venter i 3 s
 	elevio.SetDoorOpenLamp(false)
 }
 
+///////////////////FSM2////////////////////
+//Nye versjon, om denne funker kan alt over slettes
+
+func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan ElevatorState) { 
+
+	elevatorState := InitElevatorState()
+
+	InitElevator(&elevatorState)
+
+	for {
+		select {
+		case newRequests := <-requests:
+			if newRequests != elevatorState.requests {
+				UpdateRequests(newRequests, &elevatorState, elevatorStateCh)
+
+				targetFloor := FindFloorFromRequest(elevatorState.requests)
+				for {
+					sensorFloor := elevio.GetFloor()
+					if sensorFloor != -1 {
+						UpdateFloor(sensorFloor, &elevatorState, elevatorStateCh)
+					}
+
+					currentFloor := elevatorState.floor
+					if currentFloor == -1 {
+						time.Sleep(50 * time.Millisecond)
+						continue
+					}
+
+					dir := MoveToFloor2(currentFloor, targetFloor)
+					if dir != elevatorState.dirn {
+						UpdateDirection(dir, &elevatorState, elevatorStateCh)
+						elevio.SetMotorDirection(elevio.MotorDirection(dir))
+					}
+
+					if currentFloor == targetFloor {
+						UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)
+						elevio.SetMotorDirection(elevio.MD_Stop)
+						UpdateBehaviour(EB_DoorOpen, &elevatorState, elevatorStateCh)
+						time.Sleep(3000 * time.Millisecond) //TO DO fjerne hard constant
+						UpdateBehaviour(EB_Idle, &elevatorState, elevatorStateCh)
+						UpdateRequests([N_FLOORS][N_BUTTONS]bool{}, &elevatorState, elevatorStateCh)
+						break
+					}
+
+					time.Sleep(100 * time.Millisecond)
+				}
+			}
+		}
+	}
+
+
+}
+
+func MoveToFloor2(currentFloor int, targetFloor int) Direction {
+	if targetFloor > currentFloor {
+		return D_Up
+	} else if targetFloor < currentFloor {
+		return D_Down
+	}
+	return D_Stop
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //////////////Test og hjelpe funksjoner kan slettes////////////////
 
 func PrintElevatorState(e ElevatorState) {
@@ -125,7 +203,7 @@ func UpdateRequest(requests [N_FLOORS][N_BUTTONS]bool, floor int, button elevio.
 	return requests
 }
 
-func FindFloorFromRequest(request [N_FLOORS][N_BUTTONS]bool) int { //Clearer listen fra bunn opp så etg 0 -> etg 1 -> etg 2 -> etg 3 ...
+func FindFloorFromRequest(request [N_FLOORS][N_BUTTONS]bool) int { //får en int fra request
 	for floor := 0; floor < len(request); floor++ {
 		for button := 0; button < len(request[floor]); button++ {
 			if request[floor][button] {

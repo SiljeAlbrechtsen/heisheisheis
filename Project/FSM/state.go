@@ -57,21 +57,33 @@ func InitElevatorState() ElevatorState { //lager en state
 //////////////Opdater state og send til worldview/////////////////////
 
 func UpdateFloor(floor int, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+	if elevatorState.floor == floor {
+		return
+	}
 	elevatorState.floor = floor
 	elevatorStateCh <- *elevatorState
 }
 
 func UpdateDirection(direction Direction, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+	if elevatorState.dirn == direction {
+		return
+	}
 	elevatorState.dirn = direction
 	elevatorStateCh <- *elevatorState
 }
 
 func UpdateBehaviour(behaviour Behaviour, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+	if elevatorState.behaviour == behaviour {
+		return
+	}
 	elevatorState.behaviour = behaviour
 	elevatorStateCh <- *elevatorState
 }
 
 func UpdateRequests(requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+	if elevatorState.requests == requests {
+		return
+	}
 	elevatorState.requests = requests
 	elevatorStateCh <- *elevatorState
 }
