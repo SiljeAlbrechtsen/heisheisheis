@@ -37,16 +37,10 @@ func nextOrderState(currentSyncState wv.orderSyncState) wv.orderSyncState {
 	}
 }
 
-// Trigges når vi får inn nye worldviews. Synkroniserer hall orders og sender på channel når lys skal skrus på/av.
-func syncHallOrders(
-	latestWorldviews map[int]wv.Worldview,
-	myID int,
-	lightsOnCh  chan<- [2]int,
-	lightsOffCh chan<- [2]int,
-) wv.HallOrders {
+// Følger peers som er ett steg foran, og håndterer peer died.
+func syncHallOrders(latestWorldviews map[int]wv.Worldview, myID int) wv.HallOrders {
 	myHallOrders := latestWorldviews[myID].hallOrders
 
-	// Steg 1: Følg peers som er ett steg foran
 	for _, peer := range latestWorldviews {
 		for f := 0; f < wv.NumFloors; f++ {
 			for d := 0; d < wv.Directions; d++ {
@@ -60,31 +54,38 @@ func syncHallOrders(
 				} else if nextOrderState(myCurrentOrder.syncState) == peerCurrentOrder.syncState {
 					myHallOrders[f][d] = peerCurrentOrder
 
-				// Hvis vi er på confirmed, peer er på unconfirmed, men har dødd skal vi også gå til unconfirmed.
+				// Hvis peer har dødd og er ett steg bak skal vi gå tilbake
 				} else if myCurrentOrder.syncState == nextOrderState(peerCurrentOrder.syncState) && peerCurrentOrder.ownerID == wv.PeerDied {
 					myHallOrders[f][d] = peerCurrentOrder
 				}
 			}
 		}
 	}
+	return myHallOrders
+}
 
-	// Steg 2: Konsensussjekk — avanser state hvis alle er enige
+// Avanserer state når alle peers er enige, og sender på lys-channels.
+func applyConsensus(
+	myHallOrders     wv.HallOrders,
+	latestWorldviews map[int]wv.Worldview,
+	lightsOnCh       chan<- [2]int,
+	lightsOffCh      chan<- [2]int,
+) wv.HallOrders {
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
-			myOrder := myHallOrders[f][d]
-
-			switch myOrder.syncState {
+			switch myHallOrders[f][d].syncState {
 
 			case wv.Unconfirmed:
 				allAgree := true
 				for _, peer := range latestWorldviews {
+					// Hvis en peer har syncstate = none, så er de ikke enige
 					if peer.hallOrders[f][d].syncState == wv.None {
 						allAgree = false
 						break
 					}
 				}
 				if allAgree {
-					myHallOrders[f][d] = wv.Order{SyncState: wv.Confirmed, OwnerID: wv.NoOwner}
+					myHallOrders[f][d] = wv.Order{syncState: wv.Confirmed, ownerID: wv.NoOwner}
 					lightsOnCh <- [2]int{f, d}
 				}
 
@@ -92,19 +93,18 @@ func syncHallOrders(
 				allAgree := true
 				for _, peer := range latestWorldviews {
 					peerState := peer.hallOrders[f][d].syncState
-					if peerState != wv.DeleteProposed && peerState != wv.None {
+					if peerState == wv.Confirmed  {
 						allAgree = false
 						break
 					}
 				}
 				if allAgree {
-					myHallOrders[f][d] = wv.Order{SyncState: wv.None, OwnerID: wv.NoOwner}
+					myHallOrders[f][d] = wv.Order{syncState: wv.None, ownerID: wv.NoOwner}
 					lightsOffCh <- [2]int{f, d}
 				}
 			}
 		}
 	}
-
 	return myHallOrders
 }
 
@@ -122,8 +122,9 @@ func goRoutineSync(
 ) {
 	for {
 		latestWorldviews := <-worldviewToSyncCh
-		syncedHallOrders := syncHallOrders(latestWorldviews, myID, lightsOnCh, lightsOffCh)
-		syncToWorldviewCh <- syncedHallOrders
+		synced := syncHallOrders(latestWorldviews, myID)
+		final  := applyConsensus(synced, latestWorldviews, lightsOnCh, lightsOffCh)
+		syncToWorldviewCh <- final
 	}
 }
 
