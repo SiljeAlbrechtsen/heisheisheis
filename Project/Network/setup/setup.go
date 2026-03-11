@@ -12,8 +12,6 @@ import (
 
 //////// TESTING AV NETWORK PACKAGE //////////
 
-//////// TESTING AV NETWORK PACKAGE //////////
-
 // We define some custom struct to send over the network.
 // Note that all members we want to transmit must be public. Any private members
 //  will be received as zero-values.

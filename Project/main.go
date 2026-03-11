@@ -50,13 +50,6 @@ func main() {
 
 	go setup.TransmitWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
 
-
-
-
-
-
-
-
 	//__________________________________________________________________
 	//----------------  PRINTER INFORMASJON ----------------------------
 	//__________________________________________________________________

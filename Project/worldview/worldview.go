@@ -70,47 +70,49 @@ func sendWorldviewsToOtherModules(
 	updatedWorldviewToSyncCh <- copyWorldviews(latestWorldviews)
 }
 
-
-
 // _____________________________________________________________________________
 // ----------FUNKSJONER FOR Å TA IMOT OG HÅNDTERE DATA FRA ANDRE MODULER--------
 // _____________________________________________________________________________
 
 // SYNC sin func
-func updateWorldviewFromSync(latestWorldviews map[int]Worldview, orders hallOrders, myID int) {
-	latestWorldviews[myID].hallOrders = orders
+func updateWorldviewFromSync(latestWorldviews map[int]Worldview, syncToWorldviewCh <-chan HallOrders, myID int) {
+	ho := <- syncToWorldviewCh
+	latestWorldviews[myID].hallOrders = ho
 }
 
-func updatePeerWorldviewFromNetwork(worldview Worldview, myID int) { // Ingrid
+// Får inn worldview fra network, bruker IDen til å legge til/oppdatere map
+func updatePeerWorldviewFromNetwork(latestWorldviews map[int]Worldview, networkToWorldviewCh <-chan Worldview, myID int,) { // Ingrid
+	wv := <- networkToWorldviewCh
+	latestWorldviews[myID] = wv
+	
 	/*
 	Får inn en worldview. Skal bruke IDen dens til å legge det inn i mappet. 
 	Skal også merke om en peer er død? Evt sende det på en annen channel
 	*/
 }
 
-
 // TODO
 // funksjon som legger inn caborders/hallorders inn i din egen worldview. evt samle de sånn at vi kan bruke samme funksjon for de
 
 // Setter state fra confirmet til uncondiremd og ownerID til peerDied, kjøres når heis dør
-func markPeerDeadInHallOrders(hallOrders Hallorders) Hallorder {
+func markPeerDeadInHallOrders(hallOrders Hallorders, lostId int) Hallorder {
 	ho := hallOrders
 
 	for i, row := range ho{
 		for j := range row {
 			order := ho[i][j]	
-			if order.orderSyncState == Confirmed {
-				order.orderSyncState = Unconfirmed
-				}
 
+	
+			if (order.ownerID == lostID) && (order.orderSyncState == Confirmed) {
+				order.orderSyncState = Unconfirmed
 				order.ownerID = peerDied
 				
+				}	
 			ho[i][j] = order
 			}
 		}
 	return ho	
 }
-
 
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
 func updateWorldviewWithElevatorState(worldview Worldview, elevatorToWorldviewCh <-chan StateElevator) Worldview {
@@ -130,7 +132,6 @@ func updateWorldviewWithElevatorState(worldview Worldview, elevatorToWorldviewCh
     }
     return wv
 }
-
 
 /*
 Finne ut hvor disse funk skal stå. Sync?
@@ -177,7 +178,6 @@ func confirmIfAllAgree(worldviewsMap map[int]Worldview, myID int) (HallOrders, b
     return myOrders, changed
 }
 
-
 func deleteIfAllAgree(worldviewsMap map[int]Worldview, myID int) (HallOrders, bool) {
 	myOrders := worldviewsMap[myID].hallOrders
 	changed := false
@@ -209,9 +209,6 @@ func deleteIfAllAgree(worldviewsMap map[int]Worldview, myID int) (HallOrders, bo
     }
     return myOrders, changed
 }
-
-
-
 
 
 // _______________________________________________________________
@@ -331,19 +328,6 @@ func copyOneWorldviewStringKey(latestWorldviews map[int]Worldview, myID int) map
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
 func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-chan StateElevator) Worldview {
     wv := worldview
@@ -363,22 +347,15 @@ func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-cha
     return wv
 }
 
-
-func HandleLostPeers(latestWorldviews map[int]Worldview, lostPeerId string){
-	for {
-		lostID := lostPeerId
-		SetNodeDead(latestWorldviews, lostID)
-	}
-}
-
-func SetNodeDead(latestWorldviews map[int]Worldview, id string){
+// Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
+func SetNodeDeadInMap(latestWorldviews map[int]Worldview, lostID int){
 	lwv := latestWorldviews
-	//TODO: sette elevator til dead
-	for _, wv := range lwv{
-		for _, ho := range wv.hallOrders {
-			wv.hallOrders = markPeerDeadInHallOrders(vw.hallOrders)
-		}
-	}
+	///lwv[lostID].state = dead  ???
+    wv := lwv[myID]
+
+    wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, lostID)
+
+    latestWorldviews[myID] = wv
 }
 
 func addNewCabOrder(wordview Worldview, cabButtonCh chan int) {
