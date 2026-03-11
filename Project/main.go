@@ -17,7 +17,7 @@ func main() {
 	id := setup.GetNodeID()
 
 	// CHANNELS
-// Må gjøre worldview private 
+    // Må gjøre worldview private 
 	elevatorToWorldviewCh := make(chan StateElevator)
 	syncToWorldviewCh 	  := make(chan HallOrders)
 	networkToWorldviewCh  := make(chan Worldview)
