@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os/exec"
+	"reflect"
 	"strconv"
 	wv "Project/worldview"
 )
@@ -92,18 +93,23 @@ func assignHallRequests(latestWorldviews map[int]wv.Worldview, MyID int) (map[st
 
 // GO routine
 func RunHallRequestAssigner(
-	myID int, 
-	worldviewToAssignerCh <-chan map[int]wv.Worldview, 
+	myID int,
+	worldviewToAssignerCh <-chan map[int]wv.Worldview,
 	assignerToFsmCh chan<- [][]bool,
 	assignerToWordviewCh chan<- map[string][][]bool,
-	) {
-    for {
-        latestWorldviews := <- worldviewToAssignerCh
-        result, err := assignHallRequests(latestWorldviews, myID)
-        if err != nil {
-            continue
-        }
-        assignerToFsmCh <- result[strconv.Itoa(myID)]
-		assignerToWordviewCh <- result
-    }
+) {
+	var lastResult map[string][][]bool
+	for {
+		latestWorldviews := <-worldviewToAssignerCh
+		result, err := assignHallRequests(latestWorldviews, myID)
+		if err != nil {
+			continue
+		}
+		assignerToFsmCh <- result[strconv.Itoa(myID)]
+		// reflect.DeepEqual er med i standard bib. i go og brukes for å sammenligne maps.
+		if !reflect.DeepEqual(result, lastResult) {
+			assignerToWordviewCh <- result
+			lastResult = result
+		}
+	}
 }
