@@ -120,7 +120,7 @@ func syncHallOrders(
 // ---------------GO ROUTINE MED CHANNELS-----------------
 // _______________________________________________________
 
-func goRoutineSync(
+func GoRoutineSync(
 	myID              string,
 	syncToWorldviewCh chan<- wv.HallOrders,
 	worldviewToSyncCh <-chan map[string]wv.Worldview,

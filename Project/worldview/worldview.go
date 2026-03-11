@@ -1,6 +1,10 @@
 package worldview
 
-import "strconv"
+import (
+	"strconv"
+	"Project/fsm"
+
+)
 
 /*
 TODO
@@ -50,27 +54,9 @@ type HallOrders [NumFloors][Directions]Order
 type Worldview struct {
 	idElevator  string
 	hallOrders  HallOrders
-	state       StateElevator   // TODO: Må hente type fra fsm
+	state       fsm.StateElevator  
 	mycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
-}
-
-//____________________________________________________________________________________________________________________
-//---------------------- CHANNELS -------------------------------	updatedWorldviewToNetworkCh <- copyWorldviews(latestWorldviews)-----------------------------------------------------
-//____________________________________________________________________________________________________________________    
-
-
-// La de inn i samme funksjon siden de skal kjøres samtidig. Skal kjøres når worldview oppdateres
-func sendWorldviewsToOtherModules(
-	myID string,
-	latestWorldviews map[string]Worldview, 
-	updatedWorldviewToAssignerCh  chan<- map[string]TransferWorldview, 
-	updatedWorldviewToNetworkCh   chan<- map[string]TransferWorldview, 
-	updatedWorldviewToSyncCh      chan<- map[string]TransferWorldview, 
-	) {
-	updatedWorldviewToAssignerCh <- copyWorldviews(latestWorldviews)
-	updatedWorldviewToNetworkCh <- copyWorldviewsStringKey(latestWorldviews, myID)  
-	updatedWorldviewToSyncCh <- copyWorldviews(latestWorldviews)
-}
+}	
 
 // _____________________________________________________________________________
 // ----------FUNKSJONER FOR Å TA IMOT OG HÅNDTERE DATA FRA ANDRE MODULER--------
@@ -79,12 +65,13 @@ func sendWorldviewsToOtherModules(
 // SYNC sin func
 func updateWorldviewFromSync(latestWorldviews map[string]Worldview, inputSyncedHallOrders HallOrders, myID string) map[string]Worldview {
 	worldviewsMap := latestWorldviews
-	worldviewsMap[myID].hallOrders = inputSyncedHallOrders
+	worldview := worldviewsMap[myID]
+	worldview.hallOrders = inputSyncedHallOrders
 	return worldviewsMap
 }
 
 // Får inn worldview fra network, bruker IDen til å legge til/oppdatere map
-func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, inputPeerWorldview Worldview) { // Ingrid
+func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, inputPeerWorldview Worldview) map[string]Worldview{
 	worldviewsMap := latestWorldviews
 	peerID := inputPeerWorldview.idElevator
 	worldviewsMap[peerID] = inputPeerWorldview
@@ -95,7 +82,7 @@ func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, input
 // funksjon som legger inn caborders/hallorders inn i din egen worldview. evt samle de sånn at vi kan bruke samme funksjon for de
 
 // Setter state fra confirmet til uncondiremd og ownerID til peerDied, kjøres når heis dør
-func markPeerDeadInHallOrders(hallOrders Hallorders, lostId int) Hallorder {
+func markPeerDeadInHallOrders(hallOrders HallOrders, lostId int) HallOrders {
 	ho := hallOrders
 
 	for i, row := range ho{
@@ -103,8 +90,8 @@ func markPeerDeadInHallOrders(hallOrders Hallorders, lostId int) Hallorder {
 			order := ho[i][j]	
 
 	
-			if (order.ownerID == lostID) && (order.orderSyncState == Confirmed) {
-				order.orderSyncState = Unconfirmed
+			if (order.ownerID == lostId) && (order.syncState == Confirmed) {
+				order.syncState = Unconfirmed
 				order.ownerID = peerDied
 				
 				}	
@@ -116,7 +103,7 @@ func markPeerDeadInHallOrders(hallOrders Hallorders, lostId int) Hallorder {
 
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere state og
 //  ordre i worldview.
-func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator StateElevator) Worldview {
+func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fsm.StateElevator) Worldview {
     wv := worldview
     wv.state = inputStateElevator
     floor := inputStateElevator.floor
@@ -133,82 +120,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator St
     return wv
 }
 
-/*
-Finne ut hvor disse funk skal stå. Sync?
--Sjekke om alle har en ordre som er på proposedDeleted -> Da skal den settes til No Order og No Owner og skru av lys via channel til FSM
--Må ha en funksjon som sjekker om alle har unconfirmed order -> Da skal den gjøre om til confirmed. Lys skal skru på via channel til FSM
-*/
 
-// Denne itererer gjennom alle hall orders og sjekker. Klarer ikke å tenke om det er nødvendig atm
-func confirmIfAllAgree(worldviewsMap map[string]Worldview, myID string) (HallOrders, bool) {
-	myOrders := worldviewsMap[myID].hallOrders
-	changed := false
-
-	// Itererer gjennom hall orders til vår heis
-    for f := 0; f < NumFloors; f++ {
-        for d := 0; d < Directions; d++ {
-            order := myOrders[f][d]
-
-			// Sjekker om vi har noen orders som er unconfirmed
-            if order.syncState != Unconfirmed {
-                continue
-            }
-
-			// Antar først at alle er enige. Hvis noen andre har ordersyncstate til None så settes den til false
-			// Må den gjelde noen andre enn false?
-            allAgree := true
-            for _, peer := range worldviewsMap {
-                peerState := peer.hallOrders[f][d].syncState
-                if peerState == None {
-                    allAgree = false
-                    break
-                }
-            }
-
-            // Hvis alle er enige, så oppdater staten 
-            if allAgree {
-                myOrders[f][d] = Order{
-                    syncState: Confirmed,
-					// Setter ownerID etter den har vært i assigned. Evt trenger vi den? Ja tror det. Hvor skal den være?
-                    ownerID:   noOwner,
-                }
-            }
-        }
-    }
-    return myOrders, changed
-}
-
-func deleteIfAllAgree(worldviewsMap map[string]Worldview, myID string) (HallOrders, bool) {
-	myOrders := worldviewsMap[myID].hallOrders
-	changed := false
-
-    for f := 0; f < NumFloors; f++ {
-        for d := 0; d < Directions; d++ {
-            if myOrders[f][d].syncState != DeleteProposed {
-                continue
-            }
-
-            allAgree := true
-            for _, peer := range worldviewsMap {
-                peerState := peer.hallOrders[f][d].syncState
-                if peerState != DeleteProposed && peerState != None {
-                    allAgree = false
-                    break
-                }
-            }
-
-
-            if allAgree {
-                myOrders[f][d] = Order{
-                    syncState: None,
-                    ownerID:   noOwner,
-                }
-                changed = true
-            }
-        }
-    }
-    return myOrders, changed
-}
 
 
 // _______________________________________________________________
@@ -219,20 +131,20 @@ func deleteIfAllAgree(worldviewsMap map[string]Worldview, myID string) (HallOrde
 
 
 func GoroutineForWorldview(
-	myID 						  int,
-	elevatorToWorldviewCh   <-chan StateElevator,
+	myID 						  string,
+	elevatorToWorldviewCh   <-chan fsm.StateElevator,
 	syncToWorldviewCh       <-chan HallOrders,
 	networkToWorldviewCh    <-chan Worldview,
-	// TODO
+
 	newPeerIdCh   			<-chan string,
 	lostPeerIdCh    		<-chan string,
 	cabBtnCh 				<-chan int,
-	cabHallBtnchan			<-chan [2]int,
+	hallBtnCh   			<-chan [2]int,
 	
 	worldviewToAssignerCh   chan<- map[string]Worldview,
 	worldviewToSyncCh       chan<- map[string]Worldview,
 	worldviewToNetworkCh    chan<- map[string]Worldview,
-	) { 
+	) {
 // NB!!!
 // Pass på at channelsene bare sender inn når det skjer en endring, slik at de ikke blokkerer
 	// TODO må også skaffe logikk med når peer er død at den ikke tas med i beregninger i sync og assigner. Egen activ state i worldview
@@ -263,9 +175,6 @@ func GoroutineForWorldview(
 			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
 			// TODO Bare Sync trenger denne info
 			worldviewToSyncCh <- worldviewsMap
-			
-
-
 
 		// Får inn at en peer lever
 		// TODO: Sette disse to sammen og bruke samme channel?
@@ -305,25 +214,6 @@ func GoroutineForWorldview(
 	}
 // Vi har gjort det slik at alt som skal til assigner går først innom sync.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 //___________________________________________________________________________
 //------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
 //___________________________________________________________________________
@@ -362,26 +252,6 @@ func copyOneWorldviewStringKey(latestWorldviews map[string]Worldview, myID strin
     copied := make(map[string]TransferLatestWorldviews, 1)
     copied[strconv.Itoa(myID)] = latestWorldviews[myID].copyWorldview()
     return copied
-}
-
-
-// Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
-func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-chan StateElevator) Worldview {
-    wv := worldview
-    elevatorState := <-elevatorStateCh
-    wv.state = elevatorState
-    floor := elevatorState.floor
-    dir := elevatorState.dir
-
-    if strconv.Itoa(wv.hallOrders[floor][dir].ownerID) == wv.idElevator {
-        if wv.hallOrders[floor][dir].syncState == Confirmed {
-            wv.hallOrders[floor][dir].syncState = DeleteProposed
-        }
-    }
-    if wv.mycabOrders[floor] == true {
-        wv.mycabOrders[floor] = false
-    }
-    return wv
 }
 
 // Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node

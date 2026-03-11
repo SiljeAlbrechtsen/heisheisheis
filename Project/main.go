@@ -2,14 +2,17 @@ package main
 
 import (
 	"Project/Network/setup"
-	"Project/worldview"
-	"Project/assignment"
-	"Project/synchronization"
+	wv "Project/worldview"
+	assign "Project/assignment"
+	sync "Project/synchronization"
+	"Project/fsm"
 	//"flag"
 	"fmt"
 	//"os"
 	//"time"
 )
+
+// TODO: må vi ha strl på input-variabler?
 
 func main() {
 
@@ -18,43 +21,41 @@ func main() {
 
 	// CHANNELS
     // Må gjøre worldview private 
-	elevatorToWorldviewCh := make(chan StateElevator)
-	syncToWorldviewCh 	  := make(chan HallOrders)
-	networkToWorldviewCh  := make(chan Worldview)
-	assignerToWordviewCh  := make(chan map[string][][]bool)
 
+	//To worldview
+	elevatorToWorldviewCh := make(chan fsm.StateElevator)
+	syncToWorldviewCh 	  := make(chan wv.HallOrders)
+	networkToWorldviewCh  := make(chan wv.Worldview)
+	assignerToWordviewCh  := make(chan map[string][][]bool)
 	newPeerIdCh 		  := make(chan string)
 	lostPeerIdCh		  := make(chan string)
+	cabBtnCh			  := make(chan int)
+	hallBtnCh			  := make(chan [2]int)
 
-	worldviewToAssignerCh := make(chan map[int]TransferWorldview)
-	worldviewToSyncCh     := make(chan map[int]Worldview)
-	worldviewToNetworkCh  := make(chan map[string]Worldview)
+	//From worldview
+	worldviewToAssignerCh := make(chan map[string]wv.Worldview)
+	worldviewToSyncCh     := make(chan map[string]wv.Worldview)
+	worldviewToNetworkCh  := make(chan map[string]wv.Worldview)
+
+	//From Sync 
+	lightOnCh             := make(chan [2]int)
+	lightsOffCh			  := make(chan [2]int)
+
+	// From assigner
+	assignerToFsmCh       := make(chan [][]bool)
 
 
-
-	//__________________________________________________________________
-	//---------------------- PEER DISCOVERY ----------------------------
-	//__________________________________________________________________
-
-	peerUpdateCh := setup.StartPeerDiscovery(id)
-
-	//__________________________________________________________________
-	//------------- STARTER KOMMUNIKASJON MED HEARTBEATS ---------------
-	//__________________________________________________________________
+	peerUpdateCh, newPeerIdCh, lostPeerIdCh := setup.StartPeerDiscovery(id)
 
 	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
 
-	//__________________________________________________________________
-	//----------- SENDER DENNE NODEN SINE HEARTBEATS PERIODISK ---------
-	//__________________________________________________________________
-
-	worldviewToNetworkCh := make(chan setup.Worldview)
-
 	go setup.TransmitWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
 
-	//__________________________________________________________________
-	//----------------  PRINTER INFORMASJON ----------------------------
-	//__________________________________________________________________
+	go sync.GoRoutineSync(id, syncToWorldviewCh,worldviewToSyncCh, lightOnCh, lightsOffCh)
+
+	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh,syncToWorldviewCh,networkToWorldviewCh,newPeerIdCh,lostPeerIdCh,cabBtnCh,hallBtnCh,worldviewToAssignerCh,worldviewToSyncCh,worldviewToNetworkCh)
+
+	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
 
 	fmt.Println("Started")
 	for {
