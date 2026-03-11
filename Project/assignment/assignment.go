@@ -2,6 +2,7 @@ package assignment
 
 import (
 	wv "Project/worldview"
+	fsm "Project/FSM"
 	"bytes"
 	"encoding/json"
 	"os/exec"
@@ -23,13 +24,35 @@ type stateInputJSON struct {
 	CabRequests [wv.NumFloors]bool
 }
 
+func behaviourToString(b fsm.Behaviour) string {
+	switch b {
+	case fsm.EB_Moving:
+		return "moving"
+	case fsm.EB_DoorOpen:
+		return "doorOpen"
+	default:
+		return "idle"
+	}
+}
+
+func directionToString(d fsm.Direction) string {
+	switch d {
+	case fsm.D_Up:
+		return "up"
+	case fsm.D_Down:
+		return "down"
+	default:
+		return "stop"
+	}
+}
+
 // Hjelpefunksjon
 func buildState(worldview wv.Worldview) stateInputJSON {
 	return stateInputJSON{
-		Behaviour:   worldview.state.Behaviour,
-		Floor:       worldview.state.Floor,
-		Direction:   worldview.state.Direction,
-		CabRequests: worldview.mycabOrders,
+		Behaviour:   behaviourToString(worldview.State.Behaviour),
+		Floor:       worldview.State.Floor,
+		Direction:   directionToString(worldview.State.Dirn),
+		CabRequests: worldview.MycabOrders,
 	}
 }
 
@@ -39,7 +62,7 @@ func convertHallOrdersToBool(hallOrders wv.HallOrders) [wv.NumFloors][wv.Directi
 
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
-			converted[f][d] = (hallOrders[f][d].syncState == wv.Confirmed)
+			converted[f][d] = (hallOrders[f][d].SyncState == wv.Confirmed)
 		}
 	}
 	return converted
@@ -48,7 +71,7 @@ func convertHallOrdersToBool(hallOrders wv.HallOrders) [wv.NumFloors][wv.Directi
 // Hjelpefunksjon
 func buildInputHallRequestAssigner(latestWorldviews map[string]wv.Worldview, MyID string) hallRequestsInputJSON {
 	// Hent hall requests fra egen worldview
-	hallRequests := convertHallOrdersToBool(latestWorldviews[MyID].hallOrders)
+	hallRequests := convertHallOrdersToBool(latestWorldviews[MyID].HallOrders)
 
 	states := make(map[string]stateInputJSON)
 	for id, worldview := range latestWorldviews {

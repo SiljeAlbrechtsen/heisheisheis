@@ -73,10 +73,10 @@ func FSM(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan ElevatorS
 	for {
 		select {
 		case newRequests := <-requests:
-			if newRequests != elevatorState.requests {
-				elevatorState.requests = newRequests
+			if newRequests != elevatorState.Requests {
+				elevatorState.Requests = newRequests
 				//PrintElevatorState(elevatorState) //TO DO fjerne print
-				MoveToFloor(&elevatorState, FindFloorFromRequest(elevatorState.requests))
+				MoveToFloor(&elevatorState, FindFloorFromRequest(elevatorState.Requests))
 			}
 		}
 	}
@@ -106,10 +106,10 @@ func MoveToFloor(elevator *ElevatorState, targetFloor int) int { // TO DO endre 
 
 func ServeFloor(elevator *ElevatorState) { //stopper åpner dør og venter i 3 sek før den lukker døren igjen
 	fmt.Println("Serving floor")
-	elevator.behaviour = EB_DoorOpen
+	elevator.Behaviour = EB_DoorOpen
 	elevio.SetDoorOpenLamp(true)
 	time.Sleep(3000 * time.Millisecond) //TO DO fjerne hard constant
-	elevator.behaviour = EB_Idle
+	elevator.Behaviour = EB_Idle
 	elevio.SetDoorOpenLamp(false)
 }
 
@@ -132,10 +132,11 @@ func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan Elevator
 	for {
 		select {
 		case newRequests := <-requests:
-			if newRequests != elevatorState.requests {
+			if newRequests != elevatorState.Requests {
 				UpdateRequests(newRequests, &elevatorState, elevatorStateCh)
 			}
 
+<<<<<<< HEAD
 			targetFloor = FindFloorFromRequest(elevatorState.requests)
 
 			if targetFloor == -1 {
@@ -159,15 +160,23 @@ func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan Elevator
 			if sensorFloor != -1 {
 				UpdateFloor(sensorFloor, &elevatorState, elevatorStateCh)
 			}
+=======
+				targetFloor := FindFloorFromRequest(elevatorState.Requests)
+				for {
+					sensorFloor := elevio.GetFloor()
+					if sensorFloor != -1 {
+						UpdateFloor(sensorFloor, &elevatorState, elevatorStateCh)
+					}
+>>>>>>> main
 
-					currentFloor := elevatorState.floor
+					currentFloor := elevatorState.Floor
 					if currentFloor == -1 {
 						time.Sleep(50 * time.Millisecond)
 						continue
 					}
 
 					dir := MoveToFloor2(currentFloor, targetFloor)
-					if dir != elevatorState.dirn {
+					if dir != elevatorState.Dirn {
 						UpdateDirection(dir, &elevatorState, elevatorStateCh)
 						elevio.SetMotorDirection(elevio.MotorDirection(dir))
 					}
@@ -201,7 +210,7 @@ func MoveToFloor2(currentFloor int, targetFloor int) Direction {
 //////////////Test og hjelpe funksjoner kan slettes////////////////
 
 func PrintElevatorState(e ElevatorState) {
-	fmt.Printf("Floor: %d\nDirection: %d\nBehaviour: %d\nRequests: %v\n", e.floor, e.dirn, e.behaviour, e.requests)
+	fmt.Printf("Floor: %d\nDirection: %d\nBehaviour: %d\nRequests: %v\n", e.Floor, e.Dirn, e.Behaviour, e.Requests)
 }
 
 func UpdateRequest(requests [N_FLOORS][N_BUTTONS]bool, floor int, button elevio.ButtonType) [N_FLOORS][N_BUTTONS]bool {
