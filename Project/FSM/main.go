@@ -1,4 +1,4 @@
-package fsm
+package main
 
 //run
 //go run ./FSM
@@ -7,6 +7,9 @@ package fsm
 //"time" //
 //
 //elevio "../Driver"
+import (
+	
+)
 
 func DebugRun() {
 

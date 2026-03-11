@@ -1,42 +1,63 @@
 package main
 
 import (
+	fsm "Project/FSM"
 	"Project/Network/setup"
-	"Project/worldview"
+	assign "Project/assignment"
+	"Project/fsm"
+	sync "Project/synchronization"
+	wv "Project/worldview"
+
 	//"flag"
 	"fmt"
 	//"os"
 	//"time"
 )
 
+// TODO: må vi ha strl på input-variabler?
+
 func main() {
 
 	// `go run main.go -id=our_id`
 	id := setup.GetNodeID()
 
-	//__________________________________________________________________
-	//---------------------- PEER DISCOVERY ----------------------------
-	//__________________________________________________________________
+	// CHANNELS
+    // Må gjøre worldview private 
 
-	peerUpdateCh := setup.StartPeerDiscovery(id)
+	//To worldview
+	elevatorToWorldviewCh := make(chan fsm.ElevatorState)
+	syncToWorldviewCh 	  := make(chan wv.HallOrders)
+	networkToWorldviewCh  := make(chan wv.Worldview)
+	assignerToWordviewCh  := make(chan map[string][4][3]bool)
+	cabBtnCh			  := make(chan int)
+	hallBtnCh			  := make(chan [2]int)
 
-	//__________________________________________________________________
-	//------------- STARTER KOMMUNIKASJON MED HEARTBEATS ---------------
-	//__________________________________________________________________
+	//From worldview
+	worldviewToAssignerCh := make(chan map[string]wv.Worldview)
+	worldviewToSyncCh     := make(chan map[string]wv.Worldview)
+	worldviewToNetworkCh  := make(chan map[string]wv.Worldview)
+
+	//From Sync 
+	lightOnCh             := make(chan [2]int)
+	lightsOffCh			  := make(chan [2]int)
+
+	// From assigner
+	assignerToFsmCh       := make(chan [4][3]bool)  //Hardkodet ENDRE
+
+
+	peerUpdateCh, newPeerIdCh, lostPeerIdCh := setup.StartPeerDiscovery(id)
 
 	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
 
-	//__________________________________________________________________
-	//----------- SENDER DENNE NODEN SINE HEARTBEATS PERIODISK ---------
-	//__________________________________________________________________
-
-	worldviewToNetworkCh := make(chan setup.Worldview)
-
 	go setup.TransmitWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
 
-	//__________________________________________________________________
-	//----------------  PRINTER INFORMASJON ----------------------------
-	//__________________________________________________________________
+	go sync.GoRoutineSync(id, syncToWorldviewCh,worldviewToSyncCh, lightOnCh, lightsOffCh)
+
+	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh,syncToWorldviewCh,networkToWorldviewCh,newPeerIdCh,lostPeerIdCh,cabBtnCh,hallBtnCh,worldviewToAssignerCh,worldviewToSyncCh,worldviewToNetworkCh)
+
+	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
+
+	go fsm.FSM2(assignerToFsmCh,elevatorToWorldviewCh)
 
 	fmt.Println("Started")
 	for {
@@ -60,9 +81,7 @@ func main() {
 
 /*
 
-Channels
-
-
+CHANNELS:
 
 updatedWorldviewToNetworkCh := make (chan Worldview)
 updatedWorldviewToAssignerCh := make (chan Worldview)

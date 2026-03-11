@@ -1,23 +1,18 @@
 package worldview
 
+import (
+	"strconv"
+	"Project/fsm"
+
+)
+
 /*
-Fullført:
-Nå sender worldview til network, assigner og sync. 
-Laget sync motta funksjon
-laget sync sende funk i sync modul
-laget go-routine i sync
-Fikse goroutine i assigner
-- fikse goroutine i worldview
+TODO
+Lage setOwnerId. 
+Må LEGGE TIL Case fra channel fra assigner som kjører funk
+Assigner kjøres kontinuerlig, så vil den ta opp hele worldview eller går det bra
+Evt bare sende når noe endres. 
 
-Silje: liste på todo
-- få med alle endringer fra elevator
-- LEGG INN CHANNEL I MAIN
-
-
-- hva som skjer når en peer dør
-- lage nettwork motta funk (ingrig)
-
-TODO: Ordne sånn at alle channels har samme navn
 */
 
 
@@ -57,82 +52,64 @@ type HallOrders [NumFloors][Directions]Order
 
 // Struct for egen worldview
 type Worldview struct {
-	idElevator  int
+	idElevator  string
 	hallOrders  HallOrders
-	state       StateElevator   // TODO: Må hente type fra fsm
+	state       fsm.StateElevator  
 	mycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
-}
-
-//____________________________________________________________________________________________________________________
-//---------------------- CHANNELS -------------------------------	updatedWorldviewToNetworkCh <- copyWorldviews(latestWorldviews)-----------------------------------------------------
-//____________________________________________________________________________________________________________________    
-
-
-// La de inn i samme funksjon siden de skal kjøres samtidig. Skal kjøres når worldview oppdateres
-func sendWorldviewsToOtherModules(
-	latestWorldviews map[int]Worldview, 
-	updatedWorldviewToNetworkCh chan<- map[string]TransferWorldview, 
-	updatedWorldviewToAssignerCh chan<- map[int]TransferWorldview, 
-	updatedWorldviewToSyncCh chan<- map[int]TransferWorldview, 
-	myID int)  {
-	updatedWorldviewToNetworkCh <- copyWorldviewsStringKey(latestWorldviews, myID)  
-	updatedWorldviewToAssignerCh <- copyWorldviews(latestWorldviews)
-	updatedWorldviewToSyncCh <- copyWorldviews(latestWorldviews)
-}
-
-
+}	
 
 // _____________________________________________________________________________
 // ----------FUNKSJONER FOR Å TA IMOT OG HÅNDTERE DATA FRA ANDRE MODULER--------
 // _____________________________________________________________________________
 
-// Vi får inn data fra sync og network
-
 // SYNC sin func
-func updateWorldviewFromSync(latestWorldviews map[int]Worldview, orders hallOrders, myID int) {
-	latestWorldviews[myID].hallOrders = orders
+func updateWorldviewFromSync(latestWorldviews map[string]Worldview, inputSyncedHallOrders HallOrders, myID string) map[string]Worldview {
+	worldviewsMap := latestWorldviews
+	worldview := worldviewsMap[myID]
+	worldview.hallOrders = inputSyncedHallOrders
+	return worldviewsMap
 }
 
-func updatePeerWorldviewFromNetwork(worldview Worldview, myID int) { // Ingrid
-	/*
-	Får inn en worldview. Skal bruke IDen dens til å legge det inn i mappet. 
-	Skal også merke om en peer er død? Evt sende det på en annen channel
-	*/
+// Får inn worldview fra network, bruker IDen til å legge til/oppdatere map
+func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, inputPeerWorldview Worldview) map[string]Worldview{
+	worldviewsMap := latestWorldviews
+	peerID := inputPeerWorldview.idElevator
+	worldviewsMap[peerID] = inputPeerWorldview
+	return worldviewsMap
 }
-
 
 // TODO
 // funksjon som legger inn caborders/hallorders inn i din egen worldview. evt samle de sånn at vi kan bruke samme funksjon for de
 
 // Setter state fra confirmet til uncondiremd og ownerID til peerDied, kjøres når heis dør
-func markPeerDeadInHallOrders(hallOrders Hallorders) Hallorder {
+func markPeerDeadInHallOrders(hallOrders HallOrders, lostId int) HallOrders {
 	ho := hallOrders
 
 	for i, row := range ho{
 		for j := range row {
 			order := ho[i][j]	
-			if order.orderSyncState == Confirmed {
-				order.orderSyncState = Unconfirmed
-				}
 
+	
+			if (order.ownerID == lostId) && (order.syncState == Confirmed) {
+				order.syncState = Unconfirmed
 				order.ownerID = peerDied
 				
+				}	
 			ho[i][j] = order
 			}
 		}
 	return ho	
 }
 
-
-// Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
-func updateWorldviewWithElevatorState(worldview Worldview, elevatorToWorldviewCh <-chan StateElevator) Worldview {
+// Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere state og
+//  ordre i worldview.
+func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fsm.StateElevator) Worldview {
     wv := worldview
-    elevatorState := <-elevatorToWorldviewCh
-    wv.state = elevatorState
-    floor := elevatorState.floor
-    dir := elevatorState.dir
+    wv.state = inputStateElevator
+    floor := inputStateElevator.floor
+    dir := inputStateElevator.dir
 
-    if wv.hallOrders[floor][dir].ownerID == wv.idElevator {
+    if strconv.Itoa(wv.hallOrders[floor][dir].ownerID) == wv.idElevator {
         if wv.hallOrders[floor][dir].syncState == Confirmed {
             wv.hallOrders[floor][dir].syncState = DeleteProposed
         }
@@ -143,6 +120,9 @@ func updateWorldviewWithElevatorState(worldview Worldview, elevatorToWorldviewCh
     return wv
 }
 
+
+
+
 // _______________________________________________________________
 // ----------------GOROUTINE FOR WORLDVIEW------------------------
 // _______________________________________________________________
@@ -151,63 +131,97 @@ func updateWorldviewWithElevatorState(worldview Worldview, elevatorToWorldviewCh
 
 
 func GoroutineForWorldview(
-	myID 						  int,
-	elevatorToWorldviewCh  <-chan StateElevator,
-	syncToWorldviewCh      <-chan HallOrders,
-	networkToWorldviewCh   <-chan Wordlview,
-	// TODO
-	newPeerIdCh   <-chan string, 
-	lostPeerIdCh    <-chan string,
+	myID 						  string,
+	elevatorToWorldviewCh   <-chan fsm.StateElevator,
+	syncToWorldviewCh       <-chan HallOrders,
+	networkToWorldviewCh    <-chan Worldview,
 
-	worldviewToAssignerCh   chan<- map[int]Worldview
-	worldviewToSyncCh       chan<- map[int]Worldview
-	worldviewToNetworkCh    chan<- map[string]TransferWorldview) 
-	{ 
-
+	newPeerIdCh   			<-chan string,
+	lostPeerIdCh    		<-chan string,
+	cabBtnCh 				<-chan int,
+	hallBtnCh   			<-chan [2]int,
 	
-	worldviewsMap := make(map[int]Worldview)
+	worldviewToAssignerCh   chan<- map[string]Worldview,
+	worldviewToSyncCh       chan<- map[string]Worldview,
+	worldviewToNetworkCh    chan<- map[string]Worldview,
+	) {
+// NB!!!
+// Pass på at channelsene bare sender inn når det skjer en endring, slik at de ikke blokkerer
+	// TODO må også skaffe logikk med når peer er død at den ikke tas med i beregninger i sync og assigner. Egen activ state i worldview
+	worldviewsMap := make(map[string]Worldview)
+	myWorldview := worldviewsMap[myID]
 
 	for {
-		select
-	
-	// Får inn endring på state elevator. Hva skal skje da?
-	case: inputStateElevator := <-elevatorToWorldviewCh
-		updateWorldviewWithElevatorState() // ingrid hjelp
-		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
-	
-		// Får inn syncet hallorders fra sync. Den må da oppdatere får worldview også sende den oppdaterte til andre moduler
-	case: inputHallOrders := <-syncToWorldviewCh
-		updateWorldviewFromSync(worldviewsMap, inputHallOrders, myID)
-		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
-	
-		// Får inn en peers worldview. Må Oppdatere map og sende til andre moduler
-	case: inputPeerWorldview := <-networkToWorldviewCh
-		// Her må updatePeerWorldview ligge
-		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
-	
-		// Får inn at en peer lever
-	case: inputNewPeer := <-newPeerIdCh
-		// Må kjøre en funksjon
+		select {
+		
+		// Får inn endring i stateElevator fra FSM. Oppdaterer worldview med ny state og oppdaterer fullførte ordre
+		case inputStateElevator := <-elevatorToWorldviewCh:
+			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator) // ingrid hjelp
+			worldviewsMap[myID] = myWorldview
+			worldviewToNetworkCh <- worldviewsMap
+			worldviewToSyncCh <- worldviewsMap
+			
 
-		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
-	
+	// Får inn syncet hallorders fra sync. Den må da oppdatere worldview også sende den oppdaterte til andre moduler
+		case inputSyncedHallOrders := <-syncToWorldviewCh:
+			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
+			// TODO Trenger ikke sende til sync
+			worldviewToNetworkCh <- worldviewsMap
+			worldviewToAssignerCh <- worldviewsMap // Sender bare til Assigner her?
+
+		
+		// Får inn en peers worldview. Må Oppdatere map og sende til andre moduler
+		case inputPeerWorldview := <-networkToWorldviewCh:
+			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
+			// TODO Bare Sync trenger denne info
+			worldviewToSyncCh <- worldviewsMap
+
+		// Får inn at en peer lever
+		// TODO: Sette disse to sammen og bruke samme channel?
+		case inputNewPeer := <-newPeerIdCh:
+			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputNewPeer)
+			worldviewToSyncCh <- worldviewsMap
+			// TODO: Assigner + Sync
+
 		// Får inn at en peer er død
-	case: inputDeadPeer := <-lostPeerIdCh
-		// Må kjøre en funksjon
-		// peerdead funksjonen må kjøres her et sted. 
-		HandleLostPeers(worldviewsMap, inputDeadPeer)
-		sendWorldviewsToOtherModules(worldviewsMap, worldviewToNetworkCh, worldviewToAssignerCh, worldviewToSyncCh, myID)
-	} 
-}
+		case inputDeadPeer := <-lostPeerIdCh:
+			// TODO: Hvordan sette node død?
+			// peerdead funksjonen må kjøres her et sted. 
+			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
+			worldviewToSyncCh <- worldviewsMap
+			// Sync + assigner 
+
+
+		case inputHallBtn := <-hallBtnCh:
+			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
+			worldviewsMap[myID] = myWorldview
+			
+			worldviewToNetworkCh <- worldviewsMap
+			worldviewToSyncCh <- worldviewsMap
+			// TODO Network, Sync, Assigner
+
+		case inputCabBtn := <-cabBtnCh:
+			myWorldview = addNewCabOrder(myWorldview, inputCabBtn)
+			worldviewsMap[myID] = myWorldview
+
+			worldviewToNetworkCh <- worldviewsMap
+			worldviewToAssignerCh <- worldviewsMap
+				
+		// TODO Network, Sync, Assigner
+
+			}
+		} 
+	}
+// Vi har gjort det slik at alt som skal til assigner går først innom sync.
 
 //___________________________________________________________________________
 //------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
 //___________________________________________________________________________
 
-type hallOrdersPublic [NumFloors][Directions]Order
+type HallOrdersPublic [NumFloors][Directions]Order
 
 type TransferWorldview struct {
-	IdElevator  int
+	IdElevator  string
 	HallOrders  HallOrders
 	State       StateElevator   // TODO: Må hente type fra fsm
 	MycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
@@ -224,7 +238,7 @@ func copyWorldview(worldview Worldview) TransferWorldview {
 
 // TODO: Er det bedre praksis å lage mappet lokalt i funksjonen eller globalt?
 // Kopierer worldview inn i nytt map som skal sendes til andre moduler
-func copyWorldviews(latestWorldviews map[int]Worldview) map[int]TransferLatestWorldviews {
+func copyWorldviews(latestWorldviews map[string]Worldview) map[int]TransferLatestWorldviews {
     copied := make(map[int]TransferLatestWorldviews, len(latestWorldviews))
     for id, worldview := range latestWorldviews {
         copied[id] = worldview.copyWorldview()
@@ -234,45 +248,46 @@ func copyWorldviews(latestWorldviews map[int]Worldview) map[int]TransferLatestWo
 
 // Siden network opererer med string key, må jeg også ha en funksjon for det. Den returnerer også bare vårt worldview
 // Ikke bra cohesion?
-func copyOneWorldviewStringKey(latestWorldviews map[int]Worldview, myID int) map[string]TransferLatestWorldviews {
+func copyOneWorldviewStringKey(latestWorldviews map[string]Worldview, myID string) map[string]TransferLatestWorldviews {
     copied := make(map[string]TransferLatestWorldviews, 1)
     copied[strconv.Itoa(myID)] = latestWorldviews[myID].copyWorldview()
     return copied
 }
 
-// Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere worldview med data.
-func updateWorldviewWithElevatorState(worldview Worldview, elevatorStateCh <-chan StateElevator) Worldview {
-    wv := worldview
-    elevatorState := <-elevatorStateCh
-    wv.state = elevatorState
-    floor := elevatorState.floor
-    dir := elevatorState.dir
-
-    if wv.hallOrders[floor][dir].ownerID == wv.idElevator {
-        if wv.hallOrders[floor][dir].syncState == Confirmed {
-            wv.hallOrders[floor][dir].syncState = DeleteProposed
-        }
-    }
-    if wv.mycabOrders[floor] == true {
-        wv.mycabOrders[floor] = false
-    }
-    return wv
-}
-
-
-func HandleLostPeers(latestWorldviews map[int]Worldview, lostPeerId string){
-	for {
-		lostID := lostPeerId
-		SetNodeDead(latestWorldviews, lostID)
-	}
-}
-
-func SetNodeDead(latestWorldviews map[int]Worldview, id string){
+// Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
+func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview{
 	lwv := latestWorldviews
-	//TODO: sette elevator til dead
-	for _, wv := range lwv{
-		for _, ho := range wv.hallOrders {
-			wv.hallOrders = markPeerDeadInHallOrders(vw.hallOrders)
-		}
-	}
+	///lwv[lostID].state = dead  ???
+    wv := lwv[myID]
+
+    wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, lostID)
+ 
+    lwv[myID] = wv
+
+	return lwv
 }
+
+func addNewCabOrder(worldview Worldview, inputCabBtn int) Worldview{
+	wv := worldview
+
+	wv.mycabOrders[inputCabBtn] = true
+
+	return wv
+}
+
+func addNewHallOrder(worldview 	Worldview, inputHallBtn [2]int) Worldview {
+	wv := worldview
+
+	floor := inputHallBtn[0]
+	dir := inputHallBtn[1]
+
+	order := wv.hallOrders[floor][dir]
+
+	order.syncState = Unconfirmed
+	order.ownerID = noOwner
+
+	wv.hallOrders[floor][dir] = order
+
+	return wv
+}
+

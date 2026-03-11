@@ -4,6 +4,7 @@ import (
 	"Project/Network/bcast"
 	"Project/Network/localip"
 	"Project/Network/peers"
+	wv "Project/worldview"
 	"flag"
 	"fmt"
 	"os"
@@ -12,14 +13,12 @@ import (
 
 //////// TESTING AV NETWORK PACKAGE //////////
 
-//////// TESTING AV NETWORK PACKAGE //////////
-
 // We define some custom struct to send over the network.
 // Note that all members we want to transmit must be public. Any private members
 //  will be received as zero-values.
 
 // Tar inn vår worldview og kanalen vi skal sende på, og legger periodisk worldview inn på tx-kanalen
-func TransmitWorldviewPeriodically(worldviewTx chan<- Worldview, worldviewToNetworkCh <-chan Worldview) {
+func TransmitWorldviewPeriodically(worldviewTx chan<- wv.Worldview, worldviewToNetworkCh <-chan wv.Worldview) {
 	WorldviewMsg := <-worldviewToNetworkCh
 
 	for {
@@ -36,10 +35,10 @@ func TransmitWorldviewPeriodically(worldviewTx chan<- Worldview, worldviewToNetw
 }
 
 // Tar inn worldviewen vi mottar på Rx og setter den på kanalen som sender til worldview
-func ForwardWorldviewFromNetwork(worldviewRx <-chan Worldview, networkToWorldviewCh chan<- Worldview) {
+func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorldviewCh chan<- wv.Worldview) {
 	for {
-		w := <-worldviewRx
-		networkToWorldviewCh <- w
+		wv := <-worldviewRx
+		networkToWorldviewCh <- wv
 	}
 }
 
@@ -62,10 +61,12 @@ func GetNodeID() string {
 	return id
 }
 
-func StartPeerDiscovery(id string) <-chan peers.PeerUpdate {
+func StartPeerDiscovery(id string) (<-chan peers.PeerUpdate, <-chan string, <-chan string) {
 	// We make a channel for receiving updates on the id's of the peers that are
 	// alive on the network
 	peerUpdateCh := make(chan peers.PeerUpdate)
+	newPeerIdCh := make(chan string)
+	lostPeerIdCh := make(chan string)
 
 	// We can disable/enable the transmitter after it has been started.
 	// This could be used to signal that we are somehow "unavailable".
@@ -73,13 +74,27 @@ func StartPeerDiscovery(id string) <-chan peers.PeerUpdate {
 	go peers.Transmitter(10001, id, peerTxEnable)
 	go peers.Receiver(10001, peerUpdateCh)
 
-	return peerUpdateCh
+	go func () {
+		for {
+			update := <-peerUpdateCh
+
+			if update.New != "" {
+				newPeerIdCh <- update.New
+			}
+
+			for _, lostId := range update.Lost {
+				lostPeerIdCh <- lostId
+			}
+		}
+	}()
+
+	return peerUpdateCh, newPeerIdCh, lostPeerIdCh
 }
 
-func SetupWorldviewNetwork() (chan<- Worldview, <-chan Worldview) {
+func SetupWorldviewNetwork() (chan<- wv.Worldview, <-chan wv.Worldview) {
 	// We make channels for sending and receiving our custom data types
-	worldviewTx := make(chan Worldview)
-	worldviewRx := make(chan Worldview)
+	worldviewTx := make(chan wv.Worldview)
+	worldviewRx := make(chan wv.Worldview)
 
 	// And start the transmitter/receiver pair on some port
 	go bcast.Transmitter(10002, worldviewTx)

@@ -1,5 +1,9 @@
 package synchronization
 
+import (
+	wv "Project/worldview"
+)
+
 
 // ____________________________________________________________________________________________________________
 // ---------------- CHANNELS-----------------------------------------------------------------------------------
@@ -13,53 +17,101 @@ package synchronization
 //----------------  FUNKSJONER FOR Å HÅNDTERE WORLDVIEW ------------------------------------------------------
 //____________________________________________________________________________________________________________
 
-func nextOrderState(currentSyncState orderSyncState) orderSyncState {
+func nextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 	switch currentSyncState {
-	case None:
-		return Unconfirmed
-	case Unconfirmed:
-		return Confirmed
-	case Confirmed:
-		return DeleteProposed
-	case DeleteProposed:
-		return None
+
+	case wv.None:
+		return wv.Unconfirmed
+
+	case wv.Unconfirmed:
+		return wv.Confirmed
+
+	case wv.Confirmed:
+		return wv.DeleteProposed
+
+	case wv.DeleteProposed:
+		return wv.None
+
 	default:
-		return None
+		return wv.None
 	}
 }
 
-// Trigges når vi får inn nye worldviews
-func syncHallOrders(latestWorldviews map[int]Worldview) hallOrders {
-	var myHallOrders HallOrders
+// Trigges når vi får inn nye worldviews. Synkroniserer hall orders og sender på channel når lys skal skrus på/av.
+func syncHallOrders(
+	latestWorldviews map[string]wv.Worldview,
+	myID string,
+	lightsOnCh  chan<- [2]int,
+	lightsOffCh chan<- [2]int,
+) wv.HallOrders {
+	myHallOrders := latestWorldviews[myID].hallOrders
 
-	for _, peer := latestWorldviews {
-		myHallOrders = peer.hallorders
-		break
-	}
-
-	// Itererer gjennom hele map. TODO: itererer også gjennom seg selv
+	// Steg 1: Følg peers som er ett steg foran
 	for _, peer := range latestWorldviews {
-		//Iterere gjennom hallOrdersene
-		for f := 0; f < NumFloors; f++ {
-			for d := 0; d < Directions; d++ {
-				
+		for f := 0; f < wv.NumFloors; f++ {
+			for d := 0; d < wv.Directions; d++ {
 				myCurrentOrder := myHallOrders[f][d]
 				peerCurrentOrder := peer.hallOrders[f][d]
 
-				if  myCurrentOrder == peerCurrentOrder {
+				if myCurrentOrder == peerCurrentOrder {
 					continue
 
-				// TODO: slå sammen?
 				// Hvis peer er på next order skal jeg også på next order
-				} else if nextOrderState(myCurrentOrder.syncState) == peerCurrentOrder.orderSyncState {
+				} else if nextOrderState(myCurrentOrder.syncState) == peerCurrentOrder.syncState {
 					myHallOrders[f][d] = peerCurrentOrder
 
-				} else if myCurrentOrder == nextOrderState(peerCurrentOrder) && peerCurrentOrder.ownerID == peerDied{
-					myHallOrders[f][d] = peerCurrentOrder 
+				// Hvis vi er på confirmed, peer er på unconfirmed, men har dødd skal vi også gå til unconfirmed.
+				} else if myCurrentOrder.syncState == nextOrderState(peerCurrentOrder.syncState) && peerCurrentOrder.ownerID == wv.PeerDied {
+					myHallOrders[f][d] = peerCurrentOrder
 				}
 			}
 		}
 	}
+
+	// Steg 2: Konsensussjekk — avanser state hvis alle er enige
+	for f := 0; f < wv.NumFloors; f++ {
+		for d := 0; d < wv.Directions; d++ {
+			myOrder := myHallOrders[f][d]
+
+			switch myOrder.syncState {
+
+			case wv.Unconfirmed:
+				allAgree := true
+				for _, peer := range latestWorldviews {
+					if peer.hallOrders[f][d].syncState != wv.Unconfirmed {
+			
+			
+			
+			
+			
+			
+			
+						allAgree = false
+						break
+					}
+				}
+				if allAgree {
+					myHallOrders[f][d] = wv.Order{SyncState: wv.Confirmed, OwnerID: wv.NoOwner} 
+					lightsOnCh <- [2]int{f, d}
+				}
+
+			case wv.DeleteProposed:
+				allAgree := true
+				for _, peer := range latestWorldviews {
+					peerState := peer.hallOrders[f][d].syncState
+					if peerState != wv.DeleteProposed && peerState != wv.None {
+						allAgree = false
+						break
+					}
+				}
+				if allAgree {
+					myHallOrders[f][d] = wv.Order{SyncState: wv.None, OwnerID: wv.NoOwner}
+					lightsOffCh <- [2]int{f, d}
+				}
+			}
+		}
+	}
+
 	return myHallOrders
 }
 
@@ -68,15 +120,22 @@ func syncHallOrders(latestWorldviews map[int]Worldview) hallOrders {
 // ---------------GO ROUTINE MED CHANNELS-----------------
 // _______________________________________________________
 
-func goRoutineSync(
-	latestWorldviews map[int]Worldview, 
-	syncToWorldviewCh chan<- HallOrders,
-	worldviewToSyncCh <-chan map[int]Worldview) 
-	{
+func GoRoutineSync(
+	myID              string,
+	syncToWorldviewCh chan<- wv.HallOrders,
+	worldviewToSyncCh <-chan map[string]wv.Worldview,
+	lightsOnCh        chan<- [2]int,
+	lightsOffCh       chan<- [2]int,
+) {
 	for {
 		latestWorldviews := <-worldviewToSyncCh
-		syncedHallOrders := syncHallOrders(latestWorldview)
+		syncedHallOrders := syncHallOrders(latestWorldviews, myID, lightsOnCh, lightsOffCh)
 		syncToWorldviewCh <- syncedHallOrders
 	}
 }
+
+
+
+
+
 
