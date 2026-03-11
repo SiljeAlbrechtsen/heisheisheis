@@ -132,4 +132,82 @@ func goRoutineSync(
 
 
 
+/*
+1. Blokkerende bevegelsesloop
+                                                                                                                                                                                                                
+  Den indre for-loopen blokkerer hele goroutinen mens heisen beveger seg. Løsningen er å gjøre FSM2 event-drevet med tre events i samme select:                                                                 
+                                                                                                                                                                                                                
+  - Nye requests fra assigner                                                                                                                                                                                   
+  - Etasjesensor trigger (fra en poll-goroutine)
+  - Dør-timer utløper                                                                                                                                                                                           
+   
+  func pollFloorSensor(floorCh chan<- int) {                                                                                                                                                                    
+      lastFloor := -1                                                                                                                                                                                           
+      for {                                                                                                                                                                                                     
+          floor := elevio.GetFloor()                                                                                                                                                                            
+          if floor != -1 && floor != lastFloor {
+              lastFloor = floor                                                                                                                                                                                 
+              floorCh <- floor
+          }                                                                                                                                                                                                     
+          time.Sleep(20 * time.Millisecond)
+      }                                                                                                                                                                                                         
+  }               
 
+  func FSM2(requestsCh <-chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan<- ElevatorState) {                                                                                                                
+      elevatorState := InitElevatorState()
+      InitElevator(&elevatorState)                                                                                                                                                                              
+                  
+      floorSensorCh := make(chan int)                                                                                                                                                                           
+      go pollFloorSensor(floorSensorCh)
+                                                                                                                                                                                                                
+      var doorTimer <-chan time.Time
+                                                                                                                                                                                                                
+      for {       
+          select {
+          case newRequests := <-requestsCh:
+              UpdateRequests(newRequests, &elevatorState, elevatorStateCh)                                                                                                                                      
+              // Start å kjøre hvis idle                                                                                                                                                                        
+              if elevatorState.behaviour == EB_Idle {                                                                                                                                                           
+                  targetFloor := FindFloorFromRequest(elevatorState.requests)                                                                                                                                   
+                  if targetFloor != -1 {                                                                                                                                                                        
+                      dir := MoveToFloor2(elevatorState.floor, targetFloor)
+                      UpdateDirection(dir, &elevatorState, elevatorStateCh)                                                                                                                                     
+                      elevio.SetMotorDirection(elevio.MotorDirection(dir))
+                      UpdateBehaviour(EB_Moving, &elevatorState, elevatorStateCh)                                                                                                                               
+                  }
+              }                                                                                                                                                                                                 
+                  
+          case floor := <-floorSensorCh:
+              UpdateFloor(floor, &elevatorState, elevatorStateCh)
+              targetFloor := FindFloorFromRequest(elevatorState.requests)                                                                                                                                       
+              if floor == targetFloor && targetFloor != -1 {                                                                                                                                                    
+                  elevio.SetMotorDirection(elevio.MD_Stop)                                                                                                                                                      
+                  UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)                                                                                                                                      
+                  UpdateBehaviour(EB_DoorOpen, &elevatorState, elevatorStateCh)
+                  elevio.SetDoorOpenLamp(true)                                                                                                                                                                  
+                  doorTimer = time.After(3 * time.Second)                                                                                                                                                       
+              }
+                                                                                                                                                                                                                
+          case <-doorTimer:
+              elevio.SetDoorOpenLamp(false)
+              UpdateRequests([N_FLOORS][N_BUTTONS]bool{}, &elevatorState, elevatorStateCh)
+              UpdateBehaviour(EB_Idle, &elevatorState, elevatorStateCh)                                                                                                                                         
+          }                                                                                                                                                                                                     
+      }                                                                                                                                                                                                         
+  }                                                                                                                                                                                                             
+                  
+  2. FindFloorFromRequest returnerer 0 som fallback
+
+  Returner -1 i stedet, så kallende kode kan sjekke om det faktisk finnes en request:                                                                                                                           
+   
+  func FindFloorFromRequest(request [N_FLOORS][N_BUTTONS]bool) int {                                                                                                                                            
+      for floor := 0; floor < len(request); floor++ {                                                                                                                                                           
+          for button := 0; button < len(request[floor]); button++ {
+              if request[floor][button] {                                                                                                                                                                       
+                  return floor                                                                                                                                                                                  
+              }                                                                                                                                                                                                 
+          }                                                                                                                                                                                                     
+      }           
+      return -1  // ingen aktive requests
+  }                     
+*/
