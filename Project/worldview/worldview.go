@@ -1,19 +1,49 @@
 package worldview
 
 import (
-	"strconv"
 	"Project/FSM"
-
 )
 
 /*
+// Endret: Har satt ownerID som string
+
 TODO
 Lage setOwnerId. 
 Må LEGGE TIL Case fra channel fra assigner som kjører funk
 Assigner kjøres kontinuerlig, så vil den ta opp hele worldview eller går det bra
 Evt bare sende når noe endres. 
 
-*/
+  1. Sync sørger for at alle er enige om at en ordre er Confirmed — men setter OwnerID = NoOwner                                                                                                                
+  2. Assigner kjøres lokalt på hver heis med samme input → produserer samme resultat
+  3. updateOwnerIDsFromAssignment setter OwnerID basert på assignerens resultat                                                                                                                                 
+  4. Worldview broadcastes → alle ender opp med samme OwnerID                                                                                                                                                   
+                                                                       
+BUG? Endret slik at sync ikke setter ownerID til noOwner for da blir den nullet hele tiden. 
+
+
+// Er det noe som setter ordrene til død heis til unconfirmed og peer dead ? 
+
+Hvis vi har flere mottakere på en channel vil bare den som var først klar, motta verdien.
+De fungerer ved at de "leser av en jobbkø" elns
+
+  1. myWorldview.IdElevator ble aldri satt til myID                                                                                                                                                             
+  2. assignerToWordviewCh — ingen leste fra den (deadlock). Løst ved å koble den til worldview og bruke den til å sette OwnerID via updateOwnerIDsFromAssignment                                                
+  3. FindFloorFromRequest returnerte 0 i stedet for -1 når ingen ordre                                                                                                                                          
+  4. Sync overskrev OwnerID med NoOwner ved Confirmed-overgang                                                                                                                                                  
+  5. peerUpdateCh hadde to lesere, så noen peer-death events ble tapt 
+
+
+  FSM beveger seg (leser ikke requests)
+      → Assigner får ny worldview, regner ut, sender på assignerToFsmCh                                                                                                                                         
+      → Ingen leser assignerToFsmCh → Assigner blokkerer                                                                                                                                                        
+      → Worldview prøver å sende ny worldview til assigner                                                                                                                                                      
+      → Assigner kan ikke motta (blokkert) → Worldview blokkerer                                                                                                                                                
+      → FSM prøver å sende etasjeoppdatering til worldview                                                                                                                                                      
+      → Worldview kan ikke motta (blokkert) → FSM blokkerer                                                                                                                                                     
+      → DEADLOCK                                                                                                                                                                                                
+                  
+
+  */
 
 
 //______________________________________________________________________________________________________
@@ -22,13 +52,13 @@ Evt bare sende når noe endres.
 
 const (
 	Directions = 2
-	NumFloors  = 3
+	NumFloors  = 4
 )
 
 // Brukes til OwnerID
 const (
-	PeerDied = -1
-	NoOwner  = -2
+	PeerDied = "peerDied"
+	NoOwner  = ""
 )
 
 // type CabOrders [NumFloors]bool // Må vel ikke deklareres først?
@@ -45,7 +75,7 @@ const (
 
 type Order struct {
 	SyncState OrderSyncState
-	OwnerID   int
+	OwnerID   string
 }
 
 type HallOrders [NumFloors][Directions]Order
@@ -91,7 +121,7 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 			order := ho[i][j]	
 
 	
-			if strconv.Itoa(order.OwnerID) == lostId && order.SyncState == Confirmed {
+			if order.OwnerID == lostId && order.SyncState == Confirmed {
 				order.SyncState = Unconfirmed
 				order.OwnerID = PeerDied
 				
@@ -102,6 +132,8 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	return ho	
 }
 
+
+// Endring
 func dirToIndex(d fsm.Direction) int {
     if d == fsm.D_Up {
         return 0
@@ -125,7 +157,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
     }
 
     dir := dirToIndex(inputStateElevator.Dirn)
-    if strconv.Itoa(wv.HallOrders[floor][dir].OwnerID) == wv.IdElevator {
+    if wv.HallOrders[floor][dir].OwnerID == wv.IdElevator {
         if wv.HallOrders[floor][dir].SyncState == Confirmed {
             wv.HallOrders[floor][dir].SyncState = DeleteProposed
         }
@@ -144,6 +176,24 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
 // Når worldview oppdateres skal sendWorldviewsToOtherModules kjøres
 
 
+// Endret, lagt til. Den er litt feil tror jeg for den setter bare ownerID til vår egen heis og ikke de ordrene som blir tatt av andre heiser
+func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string][4][3]bool) HallOrders {
+	ho := hallOrders
+	for floor := 0; floor < NumFloors; floor++ {
+		for dir := 0; dir < Directions; dir++ {
+			if ho[floor][dir].SyncState == Confirmed {
+				for elevatorID, assigned := range assignment {
+					if assigned[floor][dir] {
+						ho[floor][dir].OwnerID = elevatorID
+						break
+					}
+				}
+			}
+		}
+	}
+	return ho
+}
+
 func GoroutineForWorldview(
 	myID 						  string,
 	elevatorToWorldviewCh   <-chan fsm.ElevatorState,
@@ -153,7 +203,9 @@ func GoroutineForWorldview(
 	lostPeerIdCh    		<-chan string,
 	cabBtnCh 				<-chan int,
 	hallBtnCh   			<-chan [2]int,
-	
+
+	assignerToWorldviewCh   <-chan map[string][4][3]bool,
+
 	worldviewToAssignerCh   chan<- map[string]Worldview,
 	worldviewToSyncCh       chan<- map[string]Worldview,
 	worldviewToNetworkCh    chan<- Worldview,
@@ -163,6 +215,8 @@ func GoroutineForWorldview(
 	// TODO må også skaffe logikk med når peer er død at den ikke tas med i beregninger i sync og assigner. Egen activ state i worldview
 	worldviewsMap := make(map[string]Worldview)
 	myWorldview := worldviewsMap[myID]
+	myWorldview.IdElevator = myID // endret
+	worldviewsMap[myID] = myWorldview // Endret, bare lagt inn
 
 	for {
 		select {
@@ -212,11 +266,14 @@ func GoroutineForWorldview(
 
 			worldviewToNetworkCh <- worldviewsMap[myID]
 			worldviewToAssignerCh <- worldviewsMap
-				
-		// TODO Network, Sync, Assigner
+
+			// Endret, lagt til
+		case inputAssignment := <-assignerToWorldviewCh:
+			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
+			worldviewsMap[myID] = myWorldview
 
 			}
-		} 
+		}
 	}
 // Vi har gjort det slik at alt som skal til assigner går først innom sync.
 

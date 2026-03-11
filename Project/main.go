@@ -28,7 +28,7 @@ func main() {
 	elevatorToWorldviewCh := make(chan fsm.ElevatorState)
 	syncToWorldviewCh := make(chan wv.HallOrders)
 	networkToWorldviewCh := make(chan wv.Worldview)
-	assignerToWordviewCh := make(chan map[string][4][3]bool)
+	assignerToWordviewCh := make(chan map[string][4][3]bool, 1)
 	cabBtnCh := make(chan int)
 	hallBtnCh := make(chan [2]int)
 
@@ -42,9 +42,10 @@ func main() {
 	lightsOffCh := make(chan [2]int)
 
 	// From assigner
-	assignerToFsmCh := make(chan [4][3]bool) //Hardkodet ENDRE
+	assignerToFsmCh := make(chan [4][3]bool, 1) //Hardkodet ENDRE
 
-	peerUpdateCh, _, lostPeerIdCh := setup.StartPeerDiscovery(id)
+	// Endret: peerUpdateCh returneres ikke lenger, se setup.go
+	_, lostPeerIdCh := setup.StartPeerDiscovery(id)
 
 	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
 
@@ -65,7 +66,7 @@ func main() {
 		}
 	}()
 
-	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, lostPeerIdCh, cabBtnCh, hallBtnCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
+	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, lostPeerIdCh, cabBtnCh, hallBtnCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
 
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
 
@@ -75,11 +76,12 @@ func main() {
 
 	for {
 		select {
-		case p := <-peerUpdateCh:
-			fmt.Printf("Peer update:\n")
-			fmt.Printf("  Peers:    %q\n", p.Peers)
-			fmt.Printf("  New:      %q\n", p.New)
-			fmt.Printf("  Lost:     %q\n", p.Lost)
+		// Endret: peer update printing er flyttet til setup.go
+		// case p := <-peerUpdateCh:
+		// 	fmt.Printf("Peer update:\n")
+		// 	fmt.Printf("  Peers:    %q\n", p.Peers)
+		// 	fmt.Printf("  New:      %q\n", p.New)
+		// 	fmt.Printf("  Lost:     %q\n", p.Lost)
 
 		case a := <-worldviewRx:
 			fmt.Printf("Received from %q: %#v\n", id, a)

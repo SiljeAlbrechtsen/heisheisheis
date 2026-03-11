@@ -198,5 +198,5 @@ func FindFloorFromRequest(request [N_FLOORS][N_BUTTONS]bool) int { //får en int
 			}
 		}
 	}
-	return 0
+	return -1
 }
