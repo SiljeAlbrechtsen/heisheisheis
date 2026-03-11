@@ -78,13 +78,13 @@ func syncHallOrders(
 			case wv.Unconfirmed:
 				allAgree := true
 				for _, peer := range latestWorldviews {
-					if peer.hallOrders[f][d].syncState == wv.None {
+					if peer.hallOrders[f][d].syncState != wv.Unconfirmed {
 						allAgree = false
 						break
 					}
 				}
 				if allAgree {
-					myHallOrders[f][d] = wv.Order{SyncState: wv.Confirmed, OwnerID: wv.NoOwner}
+					myHallOrders[f][d] = wv.Order{SyncState: wv.Confirmed, OwnerID: wv.NoOwner} 
 					lightsOnCh <- [2]int{f, d}
 				}
 

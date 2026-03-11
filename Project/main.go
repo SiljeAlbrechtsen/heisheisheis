@@ -21,6 +21,7 @@ func main() {
 	elevatorToWorldviewCh := make(chan StateElevator)
 	syncToWorldviewCh 	  := make(chan HallOrders)
 	networkToWorldviewCh  := make(chan Worldview)
+	assignerToWordviewCh  := make(chan map[string][][]bool)
 
 	newPeerIdCh 		  := make(chan string)
 	lostPeerIdCh		  := make(chan string)
@@ -28,6 +29,7 @@ func main() {
 	worldviewToAssignerCh := make(chan map[int]TransferWorldview)
 	worldviewToSyncCh     := make(chan map[int]Worldview)
 	worldviewToNetworkCh  := make(chan map[string]Worldview)
+
 
 
 	//__________________________________________________________________
