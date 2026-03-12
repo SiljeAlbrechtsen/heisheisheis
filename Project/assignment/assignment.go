@@ -5,6 +5,7 @@ import (
 	fsm "Project/FSM"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"reflect"
 )
@@ -13,15 +14,15 @@ import (
 
 // Bytte navn?
 type hallRequestsInputJSON struct {
-	HallRequests [wv.NumFloors][wv.Directions]bool // TODO: Bytte navn på directions til NumDirections?
-	States       map[string]stateInputJSON
+	HallRequests [wv.NumFloors][wv.Directions]bool `json:"hallRequests"`
+	States       map[string]stateInputJSON          `json:"states"`
 }
 
 type stateInputJSON struct {
-	Behaviour   string
-	Floor       int
-	Direction   string
-	CabRequests [wv.NumFloors]bool
+	Behaviour   string            `json:"behaviour"`
+	Floor       int               `json:"floor"`
+	Direction   string            `json:"direction"`
+	CabRequests [wv.NumFloors]bool `json:"cabRequests"`
 }
 
 func behaviourToString(b fsm.Behaviour) string {
@@ -86,7 +87,11 @@ func buildInputHallRequestAssigner(latestWorldviews map[string]wv.Worldview, MyI
 
 func convertWorldviewToJSON(latestWorldviews map[string]wv.Worldview, MyID string) ([]byte, error) {
 	input := buildInputHallRequestAssigner(latestWorldviews, MyID)
-	return json.MarshalIndent(input, "", "\t")
+	data, err := json.Marshal(input)
+	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
 }
 
 // Eller bare assignRequests, siden den sier noe om caborders også?
@@ -97,10 +102,15 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (
 	}
 
 	// Sende til hall request assigner og få svar
-	cmd := exec.Command("./Project/assignment/hall_request_assigner")
+	var stderr bytes.Buffer
+	cmd := exec.Command("./assignment/hall_request_assigner")
 	cmd.Stdin = bytes.NewReader(jsonInput)
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
+		fmt.Println("JSON sendt til assigner:", string(jsonInput))
+		fmt.Println("Binær stderr:", stderr.String())
+		fmt.Println("Binær-feil:", err)
 		return nil, err
 	}
 
@@ -121,10 +131,13 @@ func RunHallRequestAssigner(
 	var lastResult map[string][4][3]bool
 	for {
 		latestWorldviews := <-worldviewToAssignerCh
+		fmt.Println("Assigner: mottok worldview")
 		result, err := assignHallRequests(latestWorldviews, myID)
 		if err != nil {
+			fmt.Println("Assigner feil:", err)
 			continue
 		}
+		fmt.Println("Assigner: sender til FSM:", result[myID])
 		assignerToFsmCh <- result[myID]
 		// reflect.DeepEqual er med i standard bib. i go og brukes for å sammenligne maps.
 		if !reflect.DeepEqual(result, lastResult) {
