@@ -132,8 +132,18 @@ func FSM2(assignerToFsmCh chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan E
 	for {
 		select {
 		case newRequests := <-assignerToFsmCh:
-			if newRequests != elevatorState.Requests {
-				UpdateRequests(newRequests, &elevatorState, elevatorStateCh)
+			// Merger inn nye requests: assigner kan bare sette true, aldri false.
+			// Clearing skjer kun via requests_clearAtCurrentFloor når heisen betjener en etasje.
+			merged := elevatorState.Requests
+			for f := 0; f < N_FLOORS; f++ {
+				for b := 0; b < N_BUTTONS; b++ {
+					if newRequests[f][b] {
+						merged[f][b] = true
+					}
+				}
+			}
+			if merged != elevatorState.Requests {
+				UpdateRequests(merged, &elevatorState, elevatorStateCh)
 
 				if elevatorState.Floor == -1 || doorTimer != nil {
 					continue
