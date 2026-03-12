@@ -117,53 +117,101 @@ func ServeFloor(elevator *ElevatorState) { //stopper åpner dør og venter i 3 s
 ///////////////////FSM2////////////////////
 //Nye versjon, om denne funker kan alt over slettes
 
-func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan ElevatorState) { 
+func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan ElevatorState) {
 
 	elevatorState := InitElevatorState()
 
 	InitElevator(&elevatorState)
+
+	floorTicker := time.NewTicker(50 * time.Millisecond)
+	defer floorTicker.Stop()
+
+	targetFloor := -1
+	fmt.Println("FSM started")
+	var doorTimer <-chan time.Time // endret
 
 	for {
 		select {
 		case newRequests := <-requests:
 			if newRequests != elevatorState.Requests {
 				UpdateRequests(newRequests, &elevatorState, elevatorStateCh)
+				fmt.Println("Loop")
+				fmt.Println(newRequests)
 
-				targetFloor := FindFloorFromRequest(elevatorState.Requests)
-				for {
-					sensorFloor := elevio.GetFloor()
-					if sensorFloor != -1 {
-						UpdateFloor(sensorFloor, &elevatorState, elevatorStateCh)
-					}
+				targetFloor = FindFloorFromRequest(elevatorState.Requests) // endret
 
-					currentFloor := elevatorState.Floor
-					if currentFloor == -1 {
-						time.Sleep(50 * time.Millisecond)
-						continue
-					}
+				if targetFloor == -1 {
+					UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)
+					elevio.SetMotorDirection(elevio.MD_Stop) // endret
+					UpdateBehaviour(EB_Idle, &elevatorState, elevatorStateCh)
+					continue
+				}
 
-					dir := MoveToFloor2(currentFloor, targetFloor)
+				if elevatorState.Floor != -1 && doorTimer == nil { // endret
+					dir := MoveToFloor2(elevatorState.Floor, targetFloor)
 					if dir != elevatorState.Dirn {
 						UpdateDirection(dir, &elevatorState, elevatorStateCh)
-						elevio.SetMotorDirection(elevio.MotorDirection(dir))
+						elevio.SetMotorDirection(elevio.MotorDirection(dir)) // endret
 					}
-
-					if currentFloor == targetFloor {
-						UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)
-						elevio.SetMotorDirection(elevio.MD_Stop)
-						UpdateBehaviour(EB_DoorOpen, &elevatorState, elevatorStateCh)
-						time.Sleep(3000 * time.Millisecond) //TODO fjerne hard constant
-						UpdateBehaviour(EB_Idle, &elevatorState, elevatorStateCh)
-						UpdateRequests([N_FLOORS][N_BUTTONS]bool{}, &elevatorState, elevatorStateCh)
-						break
+					if dir != D_Stop {
+						UpdateBehaviour(EB_Moving, &elevatorState, elevatorStateCh)
 					}
-
-					time.Sleep(100 * time.Millisecond)
 				}
+			}
+
+		case <-doorTimer: // endret
+			elevio.SetDoorOpenLamp(false) // endret
+			UpdateBehaviour(EB_Idle, &elevatorState, elevatorStateCh) // endret
+			doorTimer = nil // endret
+			targetFloor = FindFloorFromRequest(elevatorState.Requests) // endret
+
+		case <-floorTicker.C:
+			sensorFloor := elevio.GetFloor()
+			if sensorFloor != -1 {
+				UpdateFloor(sensorFloor, &elevatorState, elevatorStateCh)
+			}
+
+			if doorTimer != nil { // endret
+				continue // endret
+			} // endret
+
+			if targetFloor == -1 {
+				targetFloor = FindFloorFromRequest(elevatorState.Requests)
+				if targetFloor == -1 {
+					continue
+				}
+			}
+
+			if elevatorState.Floor == -1 {
+				continue
+			}
+
+			if elevatorState.Floor == targetFloor {
+				UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)
+				elevio.SetMotorDirection(elevio.MD_Stop) // endret
+				UpdateBehaviour(EB_DoorOpen, &elevatorState, elevatorStateCh)
+				elevio.SetDoorOpenLamp(true)
+				doorTimer = time.After(3000 * time.Millisecond) // endret
+
+				cleared := elevatorState.Requests
+				for button := 0; button < N_BUTTONS; button++ {
+					cleared[targetFloor][button] = false
+				}
+				UpdateRequests(cleared, &elevatorState, elevatorStateCh)
+				targetFloor = -1 // endret
+				continue
+			}
+
+			dir := MoveToFloor2(elevatorState.Floor, targetFloor)
+			if dir != elevatorState.Dirn {
+				UpdateDirection(dir, &elevatorState, elevatorStateCh)
+				elevio.SetMotorDirection(elevio.MotorDirection(dir)) // endret
+			}
+			if dir != D_Stop {
+				UpdateBehaviour(EB_Moving, &elevatorState, elevatorStateCh)
 			}
 		}
 	}
-
 
 }
 

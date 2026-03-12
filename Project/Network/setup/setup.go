@@ -72,9 +72,8 @@ func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
 	go peers.Receiver(10001, peerUpdateCh)
 
 	go func() {
-		for {
-			update := <-peerUpdateCh
-
+		for update := range peerUpdateCh {
+			
 			// Flyttet hit fra main.go
 			fmt.Printf("Peer update:\n")
 			fmt.Printf("  Peers: %q\n", update.Peers)

@@ -141,9 +141,9 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 // Endring
 func dirToIndex(d fsm.Direction) int {
     if d == fsm.D_Up {
-        return 0
+        return 1
     }
-    return 1
+    return 0
 }
 
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere state og
@@ -153,12 +153,22 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
     wv.State = inputStateElevator
     floor := inputStateElevator.Floor
 
-    if floor < 0 || floor >= NumFloors { // endret: guard mot floor = -1
+    if floor < 0 || floor >= NumFloors {
         return wv
     }
 
-    if wv.MycabOrders[floor] == true {
+    if wv.MycabOrders[floor] {
         wv.MycabOrders[floor] = false
+    }
+
+    // Når heisen betjener en etasje (dør åpen), sett alle hall-ordre på etasjen til DeleteProposed
+    if inputStateElevator.Behaviour == fsm.EB_DoorOpen {
+        for dir := 0; dir < Directions; dir++ {
+            if wv.HallOrders[floor][dir].SyncState == Confirmed {
+                wv.HallOrders[floor][dir].SyncState = DeleteProposed
+            }
+        }
+        return wv
     }
 
     if inputStateElevator.Dirn == fsm.D_Stop {
@@ -166,10 +176,8 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
     }
 
     dir := dirToIndex(inputStateElevator.Dirn)
-    if wv.HallOrders[floor][dir].OwnerID == wv.IdElevator {
-        if wv.HallOrders[floor][dir].SyncState == Confirmed {
-            wv.HallOrders[floor][dir].SyncState = DeleteProposed
-        }
+    if wv.HallOrders[floor][dir].SyncState == Confirmed {
+        wv.HallOrders[floor][dir].SyncState = DeleteProposed
     }
 
     return wv
@@ -241,6 +249,7 @@ func GoroutineForWorldview(
 	// Får inn syncet hallorders fra sync. Den må da oppdatere worldview også sende den oppdaterte til andre moduler
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
+			myWorldview = worldviewsMap[myID] // hold myWorldview i sync
 			// TODO Trenger ikke sende til sync
 			worldviewToNetworkCh <- worldviewsMap[myID]
 			worldviewToAssignerCh <- worldviewsMap // Sender bare til Assigner her?
