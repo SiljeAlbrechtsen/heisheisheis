@@ -232,67 +232,58 @@ func GoroutineForWorldview(
 	// TODO må også skaffe logikk med når peer er død at den ikke tas med i beregninger i sync og assigner. Egen activ state i worldview
 	worldviewsMap := make(map[string]Worldview)
 	myWorldview := worldviewsMap[myID]
-	myWorldview.IdElevator = myID // endret
-	worldviewsMap[myID] = myWorldview // Endret, bare lagt inn
+	myWorldview.IdElevator = myID
+	worldviewsMap[myID] = myWorldview
+
+	copyMap := func(m map[string]Worldview) map[string]Worldview {
+		c := make(map[string]Worldview, len(m))
+		for k, v := range m {
+			c[k] = v
+		}
+		return c
+	}
 
 	for {
 		select {
-		
-		// Får inn endring i stateElevator fra FSM. Oppdaterer worldview med ny state og oppdaterer fullførte ordre
+
 		case inputStateElevator := <-elevatorToWorldviewCh:
-			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator) // ingrid hjelp
+			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator)
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToSyncCh <- worldviewsMap
-			
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
-	// Får inn syncet hallorders fra sync. Den må da oppdatere worldview også sende den oppdaterte til andre moduler
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
-			myWorldview = worldviewsMap[myID] // hold myWorldview i sync
-			// TODO Trenger ikke sende til sync
+			myWorldview = worldviewsMap[myID]
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToAssignerCh <- worldviewsMap // Sender bare til Assigner her?
+			worldviewToAssignerCh <- copyMap(worldviewsMap)
 
-		
-		// Får inn en peers worldview. Må Oppdatere map og sende til andre moduler
 		case inputPeerWorldview := <-networkToWorldviewCh:
 			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
-			// TODO Bare Sync trenger denne info
-			worldviewToSyncCh <- worldviewsMap
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
-		// Får inn at en peer er død
 		case inputDeadPeer := <-lostPeerIdCh:
-			// TODO: Hvordan sette node død?
-			// peerdead funksjonen må kjøres her et sted. 
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
-			worldviewToSyncCh <- worldviewsMap
-			// Sync + assigner 
-
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
 			worldviewsMap[myID] = myWorldview
-			
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToSyncCh <- worldviewsMap
-			// TODO Network, Sync, Assigner
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = addNewCabOrder(myWorldview, inputCabBtn)
 			worldviewsMap[myID] = myWorldview
-
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToAssignerCh <- worldviewsMap
+			worldviewToAssignerCh <- copyMap(worldviewsMap)
 
-			// Endret, lagt til
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
 			worldviewsMap[myID] = myWorldview
-
-			}
 		}
 	}
+}
 // Vi har gjort det slik at alt som skal til assigner går først innom sync.
 
 //___________________________________________________________________________

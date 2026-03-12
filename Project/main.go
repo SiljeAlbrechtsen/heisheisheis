@@ -14,6 +14,7 @@ import (
 	//"time"
 )
 
+
 // TODO: må vi ha strl på input-variabler?
 
 func main() {

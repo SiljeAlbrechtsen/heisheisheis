@@ -60,10 +60,15 @@ func buildState(worldview wv.Worldview) stateInputJSON {
 // Hjelpefunksjon
 func convertHallOrdersToBool(hallOrders wv.HallOrders) [wv.NumFloors][wv.Directions]bool {
 	var converted [wv.NumFloors][wv.Directions]bool
+	var orderNotAssigned bool
 
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
-			converted[f][d] = (hallOrders[f][d].SyncState == wv.Confirmed)
+			if hallOrders[f][d].SyncState == wv.Confirmed && hallOrders[f][d].OwnerID == wv.NoOwner {
+				orderNotAssigned = true
+			}
+			// Reassigner bare orders som ikke har noen owner :)
+			converted[f][d] = orderNotAssigned
 		}
 	}
 	return converted
@@ -103,6 +108,7 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (
 
 	// Sende til hall request assigner og få svar
 	var stderr bytes.Buffer
+	//fmt.Println("JSON sendt til assigner:", string(jsonInput))
 	cmd := exec.Command("./assignment/hall_request_assigner")
 	cmd.Stdin = bytes.NewReader(jsonInput)
 	cmd.Stderr = &stderr
@@ -137,7 +143,7 @@ func RunHallRequestAssigner(
 			fmt.Println("Assigner feil:", err)
 			continue
 		}
-		//fmt.Println("Assigner: sender til FSM:", result[myID])
+		fmt.Println("Assigner: sender til FSM:", result[myID])
 		assignerToFsmCh <- result[myID]
 		// reflect.DeepEqual er med i standard bib. i go og brukes for å sammenligne maps.
 		if !reflect.DeepEqual(result, lastResult) {
