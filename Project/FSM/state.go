@@ -39,6 +39,7 @@ type ElevatorState struct {
 	Dirn      Direction
 	Behaviour Behaviour
 	Requests  [N_FLOORS][N_BUTTONS]bool
+	Error     bool
 	config    struct {
 		doorOpenDuration_s float64
 	}
@@ -53,6 +54,7 @@ func InitElevatorState() ElevatorState { //lager en state
 		Floor:     -1,
 		Dirn:      D_Stop,
 		Behaviour: EB_Idle,
+		Error: false,
 		config: struct {
 			doorOpenDuration_s float64
 		}{doorOpenDuration_s: 3.0},
@@ -61,12 +63,19 @@ func InitElevatorState() ElevatorState { //lager en state
 
 //////////////Opdater state og send til worldview/////////////////////
 
+func sendState(elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+	select {
+	case elevatorStateCh <- *elevatorState:
+	default:
+	}
+}
+
 func UpdateFloor(floor int, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
 	if elevatorState.Floor == floor {
 		return
 	}
 	elevatorState.Floor = floor
-	elevatorStateCh <- *elevatorState
+	sendState(elevatorState, elevatorStateCh)
 }
 
 func UpdateDirection(direction Direction, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
@@ -75,7 +84,7 @@ func UpdateDirection(direction Direction, elevatorState *ElevatorState, elevator
 	}
 	elevio.SetMotorDirection(elevio.MotorDirection(direction))
 	elevatorState.Dirn = direction
-	elevatorStateCh <- *elevatorState
+	sendState(elevatorState, elevatorStateCh)
 }
 
 func UpdateBehaviour(behaviour Behaviour, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
@@ -83,7 +92,7 @@ func UpdateBehaviour(behaviour Behaviour, elevatorState *ElevatorState, elevator
 		return
 	}
 	elevatorState.Behaviour = behaviour
-	elevatorStateCh <- *elevatorState
+	sendState(elevatorState, elevatorStateCh)
 }
 
 func UpdateRequests(requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
@@ -91,5 +100,5 @@ func UpdateRequests(requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorS
 		return
 	}
 	elevatorState.Requests = requests
-	elevatorStateCh <- *elevatorState
+	sendState(elevatorState, elevatorStateCh)
 }

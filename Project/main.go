@@ -15,6 +15,7 @@ import (
 	//"time"
 )
 
+
 // TODO: må vi ha strl på input-variabler?
 
 func main() {
@@ -27,16 +28,16 @@ func main() {
 
 	//To worldview
 	elevatorToWorldviewCh := make(chan fsm.ElevatorState)
-	syncToWorldviewCh := make(chan wv.HallOrders)
+	syncToWorldviewCh := make(chan wv.HallOrders, 1)
 	networkToWorldviewCh := make(chan wv.Worldview)
 	assignerToWordviewCh := make(chan map[string][4][3]bool, 1)
-	cabBtnCh := make(chan int)
-	hallBtnCh := make(chan [2]int)
+	cabBtnCh := make(chan int, 8)
+	hallBtnCh := make(chan [2]int, 8)
 
 	//From worldview
-	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 16)
-	worldviewToSyncCh := make(chan map[string]wv.Worldview, 16)
-	worldviewToNetworkCh := make(chan wv.Worldview, 16)
+	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 1)
+	worldviewToSyncCh := make(chan map[string]wv.Worldview, 1)
+	worldviewToNetworkCh := make(chan wv.Worldview, 1)
 
 	//From Sync
 	lightOnCh := make(chan [2]int, 16)
@@ -85,15 +86,8 @@ func main() {
 
 	for {
 		select {
-		// Endret: peer update printing er flyttet til setup.go
-		// case p := <-peerUpdateCh:
-		// 	fmt.Printf("Peer update:\n")
-		// 	fmt.Printf("  Peers:    %q\n", p.Peers)
-		// 	fmt.Printf("  New:      %q\n", p.New)
-		// 	fmt.Printf("  Lost:     %q\n", p.Lost)
-
 		case a := <-worldviewRx:
-			fmt.Printf("Received from %q: %#v\n", id, a)
+			//fmt.Printf("Received from %q: %#v\n", id, a)
 			networkToWorldviewCh <- a
 		}
 	}

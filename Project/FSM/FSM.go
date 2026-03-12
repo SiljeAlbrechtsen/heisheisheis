@@ -116,7 +116,7 @@ func ServeFloor(elevator *ElevatorState) { //stopper åpner dør og venter i 3 s
 ///////////////////FSM2////////////////////
 //Nye versjon, om denne funker kan alt over slettes
 
-func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan ElevatorState) {
+func FSM2(assignerToFsmCh chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan ElevatorState) {
 
 	elevatorState := InitElevatorState()
 
@@ -125,34 +125,54 @@ func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan Elevator
 	floorTicker := time.NewTicker(50 * time.Millisecond)
 	defer floorTicker.Stop()
 
-	targetFloor := -1
 	fmt.Println("FSM started")
+	var doorTimer <-chan time.Time
+
 	for {
 		select {
-		case newRequests := <-requests:
-			if newRequests != elevatorState.Requests {
-				UpdateRequests(newRequests, &elevatorState, elevatorStateCh)
-				fmt.Println("Loop")
-				fmt.Println(newRequests)
-			}
-
-			targetFloor = FindFloorFromRequest(elevatorState.Requests)
-
-			if targetFloor == -1 {
-				UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)
-				UpdateBehaviour(EB_Idle, &elevatorState, elevatorStateCh)
-				continue
-			}
-
-			if elevatorState.Floor != -1 {
-				dir := MoveToFloor2(elevatorState.Floor, targetFloor)
-				if dir != elevatorState.Dirn {
-					UpdateDirection(dir, &elevatorState, elevatorStateCh)
-				}
-				if dir != D_Stop {
-					UpdateBehaviour(EB_Moving, &elevatorState, elevatorStateCh)
+		case newRequests := <-assignerToFsmCh:
+			// Merger inn nye requests: assigner kan bare sette true, aldri false.
+			// Clearing skjer kun via requests_clearAtCurrentFloor når heisen betjener en etasje.
+			merged := elevatorState.Requests
+			for f := 0; f < N_FLOORS; f++ {
+				for b := 0; b < N_BUTTONS; b++ {
+					if newRequests[f][b] {
+						merged[f][b] = true
+					}
 				}
 			}
+			if merged != elevatorState.Requests {
+				UpdateRequests(merged, &elevatorState, elevatorStateCh)
+
+				if elevatorState.Floor == -1 || doorTimer != nil {
+					continue
+				}
+
+				db := requests_chooseDirection(elevatorState)
+				if db.ElevatorBehaviour == EB_DoorOpen {
+					elevio.SetMotorDirection(elevio.MD_Stop)
+					elevio.SetDoorOpenLamp(true)
+					elevatorState = requests_clearAtCurrentFloor(elevatorState)
+					UpdateRequests(elevatorState.Requests, &elevatorState, elevatorStateCh)
+					UpdateBehaviour(EB_DoorOpen, &elevatorState, elevatorStateCh)
+					doorTimer = time.After(3000 * time.Millisecond)
+				} else {
+					if db.Dirn != elevatorState.Dirn {
+						UpdateDirection(db.Dirn, &elevatorState, elevatorStateCh)
+						elevio.SetMotorDirection(elevio.MotorDirection(db.Dirn))
+					}
+					UpdateBehaviour(db.ElevatorBehaviour, &elevatorState, elevatorStateCh)
+				}
+			}
+
+		case <-doorTimer:
+			elevio.SetDoorOpenLamp(false)
+			doorTimer = nil
+
+			db := requests_chooseDirection(elevatorState)
+			UpdateDirection(db.Dirn, &elevatorState, elevatorStateCh)
+			UpdateBehaviour(db.ElevatorBehaviour, &elevatorState, elevatorStateCh)
+			elevio.SetMotorDirection(elevio.MotorDirection(db.Dirn))
 
 		case <-floorTicker.C:
 			sensorFloor := elevio.GetFloor()
@@ -160,51 +180,28 @@ func FSM2(requests chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan Elevator
 				UpdateFloor(sensorFloor, &elevatorState, elevatorStateCh)
 			}
 
-			if targetFloor == -1 {
-				targetFloor = FindFloorFromRequest(elevatorState.Requests)
-				if targetFloor == -1 {
-					continue
-				}
-			}
-
-			if elevatorState.Floor == -1 {
+			if doorTimer != nil || elevatorState.Floor == -1 || elevatorState.Behaviour != EB_Moving {
 				continue
 			}
 
-			if elevatorState.Floor == targetFloor {
-				UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)
-
-				fmt.Println("Serve")
-
-				UpdateBehaviour(EB_DoorOpen, &elevatorState, elevatorStateCh)
+			if requests_shouldStop(elevatorState) {
+				elevio.SetMotorDirection(elevio.MD_Stop)
 				elevio.SetDoorOpenLamp(true)
-				time.Sleep(3000 * time.Millisecond) //TODO fjerne hard constant
-				elevio.SetDoorOpenLamp(false)
-				UpdateBehaviour(EB_Idle, &elevatorState, elevatorStateCh)
-
-				cleared := elevatorState.Requests
-				for button := 0; button < N_BUTTONS; button++ {
-					cleared[targetFloor][button] = false
-				}
-				UpdateRequests(cleared, &elevatorState, elevatorStateCh)
-
-				targetFloor = FindFloorFromRequest(elevatorState.Requests)
-				if targetFloor == -1 {
-
-					continue
-				}
+				elevatorState = requests_clearAtCurrentFloor(elevatorState)
+				UpdateRequests(elevatorState.Requests, &elevatorState, elevatorStateCh)
+				UpdateDirection(D_Stop, &elevatorState, elevatorStateCh)
+				UpdateBehaviour(EB_DoorOpen, &elevatorState, elevatorStateCh)
+				doorTimer = time.After(3000 * time.Millisecond)
+				continue
 			}
 
-			dir := MoveToFloor2(elevatorState.Floor, targetFloor)
-			if dir != elevatorState.Dirn {
-				UpdateDirection(dir, &elevatorState, elevatorStateCh)
-			}
-			if dir != D_Stop {
-				UpdateBehaviour(EB_Moving, &elevatorState, elevatorStateCh)
+			db := requests_chooseDirection(elevatorState)
+			if db.Dirn != elevatorState.Dirn {
+				UpdateDirection(db.Dirn, &elevatorState, elevatorStateCh)
+				elevio.SetMotorDirection(elevio.MotorDirection(db.Dirn))
 			}
 		}
 	}
-
 }
 
 func MoveToFloor2(currentFloor int, targetFloor int) Direction {

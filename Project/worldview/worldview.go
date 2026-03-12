@@ -92,15 +92,9 @@ type Worldview struct {
 	HallOrders  HallOrders
 	State       fsm.ElevatorState
 	MycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
-}
-
-func snapshotWorldviews(src map[string]Worldview) map[string]Worldview { //Chat la till,
-	dst := make(map[string]Worldview, len(src))
-	for id, worldview := range src {
-		dst[id] = worldview
-	}
-	return dst
-}
+	AllCabOrders map[string][4][3]bool
+	ErrorState bool
+}	
 
 // _____________________________________________________________________________
 // ----------FUNKSJONER FOR Å TA IMOT OG HÅNDTERE DATA FRA ANDRE MODULER--------
@@ -150,9 +144,9 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 // Endring
 func dirToIndex(d fsm.Direction) int {
     if d == fsm.D_Up {
-        return 0
+        return 1
     }
-    return 1
+    return 0
 }
 
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere state og
@@ -163,12 +157,22 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
     wv.State = inputStateElevator
     floor := inputStateElevator.Floor
 
-    if floor < 0 || floor >= NumFloors { // endret: guard mot floor = -1
+    if floor < 0 || floor >= NumFloors {
         return wv
     }
 
-    if wv.MycabOrders[floor] == true {
+    if wv.MycabOrders[floor] {
         wv.MycabOrders[floor] = false
+    }
+
+    // Når heisen betjener en etasje (dør åpen), sett alle hall-ordre på etasjen til DeleteProposed
+    if inputStateElevator.Behaviour == fsm.EB_DoorOpen {
+        for dir := 0; dir < Directions; dir++ {
+            if wv.HallOrders[floor][dir].SyncState == Confirmed {
+                wv.HallOrders[floor][dir].SyncState = DeleteProposed
+            }
+        }
+        return wv
     }
 
     if inputStateElevator.Dirn == fsm.D_Stop {
@@ -176,10 +180,8 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
     }
 
     dir := dirToIndex(inputStateElevator.Dirn)
-    if wv.HallOrders[floor][dir].OwnerID == wv.IdElevator {
-        if wv.HallOrders[floor][dir].SyncState == Confirmed {
-            wv.HallOrders[floor][dir].SyncState = DeleteProposed
-        }
+    if wv.HallOrders[floor][dir].SyncState == Confirmed {
+        wv.HallOrders[floor][dir].SyncState = DeleteProposed
     }
 
     return wv
@@ -231,75 +233,61 @@ func GoroutineForWorldview(
 	// TODO må også skaffe logikk med når peer er død at den ikke tas med i beregninger i sync og assigner. Egen activ state i worldview
 	worldviewsMap := make(map[string]Worldview)
 	myWorldview := worldviewsMap[myID]
-	myWorldview.IdElevator = myID // endret
-	worldviewsMap[myID] = myWorldview // Endret, bare lagt inn
+	myWorldview.IdElevator = myID
+	worldviewsMap[myID] = myWorldview
+
+	copyMap := func(m map[string]Worldview) map[string]Worldview {
+		c := make(map[string]Worldview, len(m))
+		for k, v := range m {
+			c[k] = v
+		}
+		return c
+	}
 
 	for {
 		fmt.Println("Worldview")
 		select {
 
-		// Får inn endring i stateElevator fra FSM. Oppdaterer worldview med ny state og oppdaterer fullførte ordre
 		case inputStateElevator := <-elevatorToWorldviewCh:
-			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator) // ingrid hjelp
+			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator)
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToSyncCh <- snapshotWorldviews(worldviewsMap)
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
-			// Får inn syncet hallorders fra sync. Den må da oppdatere worldview også sende den oppdaterte til andre moduler
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
 			myWorldview = worldviewsMap[myID]
-			// TODO Trenger ikke sende til sync
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToAssignerCh <- snapshotWorldviews(worldviewsMap) // Sender bare til Assigner her? //Chat endret la til snapshot
+			worldviewToAssignerCh <- copyMap(worldviewsMap)
 
-		// Får inn en peers worldview. Må Oppdatere map og sende til andre moduler
 		case inputPeerWorldview := <-networkToWorldviewCh:
 			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
-			myWorldview = worldviewsMap[myID]
-			// TODO Bare Sync trenger denne info
-			worldviewToSyncCh <- snapshotWorldviews(worldviewsMap) //Chat endret
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
-		// Får inn at en peer er død
 		case inputDeadPeer := <-lostPeerIdCh:
-			// TODO: Hvordan sette node død?
-			// peerdead funksjonen må kjøres her et sted.
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
-			myWorldview = worldviewsMap[myID]
-			worldviewToSyncCh <- snapshotWorldviews(worldviewsMap) //Chat endret
-			// Sync + assigner
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
 			fmt.Println(myWorldview)
 			worldviewsMap[myID] = myWorldview
-
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToSyncCh <- snapshotWorldviews(worldviewsMap) //Chat endret
-			// TODO Network, Sync, Assigner
-			fmt.Println(3)
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = addNewCabOrder(myWorldview, inputCabBtn)
 			worldviewsMap[myID] = myWorldview
-
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToAssignerCh <- snapshotWorldviews(worldviewsMap) // Fra Alexsey
+			worldviewToAssignerCh <- copyMap(worldviewsMap)
 
-			// TODO Network, Sync, Assigner
-
-			worldviewToAssignerCh <- worldviewsMap
-
-			// Endret, lagt til
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
 			worldviewsMap[myID] = myWorldview
-
-			}
 		}
+
 	}
-
-
+}
 // Vi har gjort det slik at alt som skal til assigner går først innom sync.
 
 //___________________________________________________________________________
@@ -337,8 +325,9 @@ func copyWorldviews(latestWorldviews map[string]Worldview) map[string]TransferWo
 // Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
 func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
 	lwv := latestWorldviews
-	///lwv[lostID].state = dead  ???
-	wv := lwv[myID]
+	lostWorldview := lwv[lostID]
+	lostWorldview.State.Error = true
+    wv := lwv[myID]
 
 	wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, lostID)
 
