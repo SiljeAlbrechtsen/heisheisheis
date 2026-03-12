@@ -3,17 +3,54 @@ package worldview
 import (
 	fsm "Project/FSM"
 	"fmt"
-	"strconv"
+	//"strconv"
 )
 
 /*
+// Endret: Har satt ownerID som string
+
 TODO
 Lage setOwnerId.
 Må LEGGE TIL Case fra channel fra assigner som kjører funk
 Assigner kjøres kontinuerlig, så vil den ta opp hele worldview eller går det bra
 Evt bare sende når noe endres.
 
-*/
+  1. Sync sørger for at alle er enige om at en ordre er Confirmed — men setter OwnerID = NoOwner                                                                                                                
+  2. Assigner kjøres lokalt på hver heis med samme input → produserer samme resultat
+  3. updateOwnerIDsFromAssignment setter OwnerID basert på assignerens resultat                                                                                                                                 
+  4. Worldview broadcastes → alle ender opp med samme OwnerID                                                                                                                                                   
+                                                                       
+BUG? Endret slik at sync ikke setter ownerID til noOwner for da blir den nullet hele tiden. 
+
+
+// Er det noe som setter ordrene til død heis til unconfirmed og peer dead ? 
+
+Hvis vi har flere mottakere på en channel vil bare den som var først klar, motta verdien.
+De fungerer ved at de "leser av en jobbkø" elns
+
+  1. myWorldview.IdElevator ble aldri satt til myID                                                                                                                                                             
+  2. assignerToWordviewCh — ingen leste fra den (deadlock). Løst ved å koble den til worldview og bruke den til å sette OwnerID via updateOwnerIDsFromAssignment                                                
+  3. FindFloorFromRequest returnerte 0 i stedet for -1 når ingen ordre                                                                                                                                          
+  4. Sync overskrev OwnerID med NoOwner ved Confirmed-overgang                                                                                                                                                  
+  5. peerUpdateCh hadde to lesere, så noen peer-death events ble tapt 
+
+
+  FSM beveger seg (leser ikke requests)
+      → Assigner får ny worldview, regner ut, sender på assignerToFsmCh                                                                                                                                         
+      → Ingen leser assignerToFsmCh → Assigner blokkerer                                                                                                                                                        
+      → Worldview prøver å sende ny worldview til assigner                                                                                                                                                      
+      → Assigner kan ikke motta (blokkert) → Worldview blokkerer                                                                                                                                                
+      → FSM prøver å sende etasjeoppdatering til worldview                                                                                                                                                      
+      → Worldview kan ikke motta (blokkert) → FSM blokkerer                                                                                                                                                     
+      → DEADLOCK                                                                                                                                                                                                
+Fikset med buffret channel 
+
+
+  Bug: elevio.SetMotorDirection kalles aldri i FSM2 
+FSM/FSM.go — elevio.SetMotorDirection aldri kalt i FSM2                                                                                                                                                    
+  UpdateDirection oppdaterer bare intern state og sender til worldview — den starter ikke motoren fysisk. Lagt til SetMotorDirection-kall på fire steder: når ingen ordre, når retning settes fra               
+  requests-casen, ved ankomst, og når retning settes fra floorTicker-casen. 
+  */
 
 //______________________________________________________________________________________________________
 //----------------  Structs ----------------------------------------------------------------------------
@@ -26,8 +63,8 @@ const (
 
 // Brukes til OwnerID
 const (
-	PeerDied = -1
-	NoOwner  = -2
+	PeerDied = "peerDied"
+	NoOwner  = ""
 )
 
 // type CabOrders [NumFloors]bool // Må vel ikke deklareres først?
@@ -44,7 +81,7 @@ const (
 
 type Order struct {
 	SyncState OrderSyncState
-	OwnerID   int
+	OwnerID   string
 }
 
 type HallOrders [NumFloors][Directions]Order
@@ -97,7 +134,8 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 		for j := range row {
 			order := ho[i][j]
 
-			if strconv.Itoa(order.OwnerID) == lostId && order.SyncState == Confirmed {
+	
+			if order.OwnerID == lostId && order.SyncState == Confirmed {
 				order.SyncState = Unconfirmed
 				order.OwnerID = PeerDied
 
@@ -108,30 +146,43 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	return ho
 }
 
+
+// Endring
+func dirToIndex(d fsm.Direction) int {
+    if d == fsm.D_Up {
+        return 0
+    }
+    return 1
+}
+
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere state og
 //
 //	ordre i worldview.
 func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fsm.ElevatorState) Worldview {
-	wv := worldview
-	wv.State = inputStateElevator
-	floor := inputStateElevator.Floor
-	dir := int(inputStateElevator.Dirn)
+    wv := worldview
+    wv.State = inputStateElevator
+    floor := inputStateElevator.Floor
 
-	// floor is -1 when between floors; dir is -1 for D_Down — guard before any array access
-	if floor < 0 || floor >= NumFloors {
-		return wv
-	}
+    if floor < 0 || floor >= NumFloors { // endret: guard mot floor = -1
+        return wv
+    }
 
-	if dir >= 0 && dir < Directions {
-		if strconv.Itoa(wv.HallOrders[floor][dir].OwnerID) == wv.IdElevator {
-			if wv.HallOrders[floor][dir].SyncState == Confirmed {
-				wv.HallOrders[floor][dir].SyncState = DeleteProposed
-			}
-		}
-	}
+    if wv.MycabOrders[floor] == true {
+        wv.MycabOrders[floor] = false
+    }
 
-	wv.MycabOrders[floor] = false
-	return wv
+    if inputStateElevator.Dirn == fsm.D_Stop {
+        return wv
+    }
+
+    dir := dirToIndex(inputStateElevator.Dirn)
+    if wv.HallOrders[floor][dir].OwnerID == wv.IdElevator {
+        if wv.HallOrders[floor][dir].SyncState == Confirmed {
+            wv.HallOrders[floor][dir].SyncState = DeleteProposed
+        }
+    }
+
+    return wv
 }
 
 // _______________________________________________________________
@@ -140,29 +191,48 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
 
 // Når worldview oppdateres skal sendWorldviewsToOtherModules kjøres
 
+
+// Endret, lagt til. Den er litt feil tror jeg for den setter bare ownerID til vår egen heis og ikke de ordrene som blir tatt av andre heiser
+func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string][4][3]bool) HallOrders {
+	ho := hallOrders
+	for floor := 0; floor < NumFloors; floor++ {
+		for dir := 0; dir < Directions; dir++ {
+			if ho[floor][dir].SyncState == Confirmed {
+				for elevatorID, assigned := range assignment {
+					if assigned[floor][dir] {
+						ho[floor][dir].OwnerID = elevatorID
+						break
+					}
+				}
+			}
+		}
+	}
+	return ho
+}
+
 func GoroutineForWorldview(
 	myID string,
 	elevatorToWorldviewCh <-chan fsm.ElevatorState,
 	syncToWorldviewCh <-chan HallOrders,
 	networkToWorldviewCh <-chan Worldview,
 
-	lostPeerIdCh <-chan string,
-	cabBtnCh <-chan int,
-	hallBtnCh <-chan [2]int,
+	lostPeerIdCh    		<-chan string,
+	cabBtnCh 				<-chan int,
+	hallBtnCh   			<-chan [2]int,
 
-	worldviewToAssignerCh chan<- map[string]Worldview,
-	worldviewToSyncCh chan<- map[string]Worldview,
-	worldviewToNetworkCh chan<- Worldview,
-) {
-	// NB!!!
-	// Pass på at channelsene bare sender inn når det skjer en endring, slik at de ikke blokkerer
+	assignerToWorldviewCh   <-chan map[string][4][3]bool,
+
+	worldviewToAssignerCh   chan<- map[string]Worldview,
+	worldviewToSyncCh       chan<- map[string]Worldview,
+	worldviewToNetworkCh    chan<- Worldview,
+	) {
+// NB!!!
+// Pass på at channelsene bare sender inn når det skjer en endring, slik at de ikke blokkerer
 	// TODO må også skaffe logikk med når peer er død at den ikke tas med i beregninger i sync og assigner. Egen activ state i worldview
 	worldviewsMap := make(map[string]Worldview)
-	myWorldview := Worldview{IdElevator: myID}
-	worldviewsMap[myID] = myWorldview
-
-	fmt.Println(1)
-	fmt.Println(myWorldview)
+	myWorldview := worldviewsMap[myID]
+	myWorldview.IdElevator = myID // endret
+	worldviewsMap[myID] = myWorldview // Endret, bare lagt inn
 
 	for {
 		fmt.Println("Worldview")
@@ -214,13 +284,21 @@ func GoroutineForWorldview(
 			worldviewsMap[myID] = myWorldview
 
 			worldviewToNetworkCh <- worldviewsMap[myID]
-			worldviewToAssignerCh <- snapshotWorldviews(worldviewsMap)
+			worldviewToAssignerCh <- snapshotWorldviews(worldviewsMap) // Fra Alexsey
 
 			// TODO Network, Sync, Assigner
 
+			worldviewToAssignerCh <- worldviewsMap
+
+			// Endret, lagt til
+		case inputAssignment := <-assignerToWorldviewCh:
+			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
+			worldviewsMap[myID] = myWorldview
+
+			}
 		}
 	}
-}
+
 
 // Vi har gjort det slik at alt som skal til assigner går først innom sync.
 

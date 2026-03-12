@@ -61,25 +61,31 @@ func GetNodeID() string {
 	return id
 }
 
-func StartPeerDiscovery(id string) (<-chan peers.PeerUpdate, <-chan string, <-chan string) {
-	// We make a channel for receiving updates on the id's of the peers that are
-	// alive on the network
+// Endret: returnerer ikke lenger peerUpdateCh for å unngå to lesere på samme kanal
+func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
 	peerUpdateCh := make(chan peers.PeerUpdate)
 	newPeerIdCh := make(chan string)
 	lostPeerIdCh := make(chan string)
 
-	// We can disable/enable the transmitter after it has been started.
-	// This could be used to signal that we are somehow "unavailable".
 	peerTxEnable := make(chan bool)
 	go peers.Transmitter(10001, id, peerTxEnable)
 	go peers.Receiver(10001, peerUpdateCh)
 
-	go func () {
+	go func() {
 		for {
 			update := <-peerUpdateCh
 
+			// Flyttet hit fra main.go
+			fmt.Printf("Peer update:\n")
+			fmt.Printf("  Peers: %q\n", update.Peers)
+			fmt.Printf("  New:   %q\n", update.New)
+			fmt.Printf("  Lost:  %q\n", update.Lost)
+
 			if update.New != "" {
-				newPeerIdCh <- update.New
+				select {
+				case newPeerIdCh <- update.New: // endret: non-blocking
+				default:
+				}
 			}
 
 			for _, lostId := range update.Lost {
@@ -88,7 +94,7 @@ func StartPeerDiscovery(id string) (<-chan peers.PeerUpdate, <-chan string, <-ch
 		}
 	}()
 
-	return peerUpdateCh, newPeerIdCh, lostPeerIdCh
+	return newPeerIdCh, lostPeerIdCh
 }
 
 func SetupWorldviewNetwork() (chan<- wv.Worldview, <-chan wv.Worldview) {

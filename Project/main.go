@@ -26,12 +26,12 @@ func main() {
 	// Må gjøre worldview private
 
 	//To worldview
-	elevatorToWorldviewCh := make(chan fsm.ElevatorState, 16)
-	syncToWorldviewCh := make(chan wv.HallOrders, 16)
-	networkToWorldviewCh := make(chan wv.Worldview, 16)
-	assignerToWordviewCh := make(chan map[string][4][3]bool, 16)
-	cabBtnCh := make(chan int, 16)
-	hallBtnCh := make(chan [2]int, 16)
+	elevatorToWorldviewCh := make(chan fsm.ElevatorState)
+	syncToWorldviewCh := make(chan wv.HallOrders)
+	networkToWorldviewCh := make(chan wv.Worldview)
+	assignerToWordviewCh := make(chan map[string][4][3]bool, 1)
+	cabBtnCh := make(chan int)
+	hallBtnCh := make(chan [2]int)
 
 	//From worldview
 	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 16)
@@ -43,9 +43,10 @@ func main() {
 	lightsOffCh := make(chan [2]int, 16)
 
 	// From assigner
-	assignerToFsmCh := make(chan [4][3]bool, 16) //Hardkodet ENDRE
+	assignerToFsmCh := make(chan [4][3]bool, 16) //Hardkodet ENDRE Litt ekstremt med 16 i buffer?
 
-	peerUpdateCh, _, lostPeerIdCh := setup.StartPeerDiscovery(id)
+	// Endret: peerUpdateCh returneres ikke lenger, se setup.go
+	_, lostPeerIdCh := setup.StartPeerDiscovery(id)
 
 	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
 
@@ -68,7 +69,7 @@ func main() {
 		}
 	}()
 
-	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, lostPeerIdCh, cabBtnCh, hallBtnCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
+	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, lostPeerIdCh, cabBtnCh, hallBtnCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
 
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
 
@@ -84,11 +85,12 @@ func main() {
 
 	for {
 		select {
-		case p := <-peerUpdateCh:
-			fmt.Printf("Peer update:\n")
-			fmt.Printf("  Peers:    %q\n", p.Peers)
-			fmt.Printf("  New:      %q\n", p.New)
-			fmt.Printf("  Lost:     %q\n", p.Lost)
+		// Endret: peer update printing er flyttet til setup.go
+		// case p := <-peerUpdateCh:
+		// 	fmt.Printf("Peer update:\n")
+		// 	fmt.Printf("  Peers:    %q\n", p.Peers)
+		// 	fmt.Printf("  New:      %q\n", p.New)
+		// 	fmt.Printf("  Lost:     %q\n", p.Lost)
 
 		case a := <-worldviewRx:
 			fmt.Printf("Received from %q: %#v\n", id, a)

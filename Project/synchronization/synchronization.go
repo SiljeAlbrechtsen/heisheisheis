@@ -91,7 +91,7 @@ func syncHallOrders(
 					}
 				}
 				if allAgree {
-					myHallOrders[f][d] = wv.Order{SyncState: wv.Confirmed, OwnerID: wv.NoOwner} 
+					myHallOrders[f][d].SyncState = wv.Confirmed
 					lightsOnCh <- [2]int{f, d}
 				}
 
