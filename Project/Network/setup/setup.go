@@ -38,6 +38,11 @@ func TransmitWorldviewPeriodically(worldviewTx chan<- wv.Worldview, worldviewToN
 func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorldviewCh chan<- wv.Worldview) {
 	for {
 		wv := <-worldviewRx
+		fmt.Println("Worldview fra: ", wv.IdElevator)
+		fmt.Println("Hallorders: ", wv.HallOrders)
+		fmt.Println("State: ", wv.State)
+		fmt.Println("myCaborders: ", wv.MycabOrders)
+
 		networkToWorldviewCh <- wv
 	}
 }
