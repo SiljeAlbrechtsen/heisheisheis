@@ -36,6 +36,7 @@ type ElevatorState struct {
 	Dirn      Direction
 	Behaviour Behaviour
 	Requests  [N_FLOORS][N_BUTTONS]bool
+	Error     bool
 	config    struct {
 		doorOpenDuration_s float64
 	}
@@ -48,6 +49,7 @@ func InitElevatorState() ElevatorState { //lager en state
 		Floor:     -1,
 		Dirn:      D_Stop,
 		Behaviour: EB_Idle,
+		Error: false,
 		config: struct {
 			doorOpenDuration_s float64
 		}{doorOpenDuration_s: 3.0},

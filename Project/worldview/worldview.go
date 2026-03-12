@@ -91,6 +91,8 @@ type Worldview struct {
 	HallOrders  HallOrders
 	State       fsm.ElevatorState  
 	MycabOrders [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
+	AllCabOrders map[string][4][3]bool
+	ErrorState bool
 }	
 
 // _____________________________________________________________________________
@@ -282,6 +284,7 @@ func GoroutineForWorldview(
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
 			worldviewsMap[myID] = myWorldview
 		}
+
 	}
 }
 // Vi har gjort det slik at alt som skal til assigner går først innom sync.
@@ -321,7 +324,8 @@ func copyWorldviews(latestWorldviews map[string]Worldview) map[string]TransferWo
 // Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
 func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview{
 	lwv := latestWorldviews
-	///lwv[lostID].state = dead  ???
+	lostWorldview := lwv[lostID]
+	lostWorldview.State.Error = true
     wv := lwv[myID]
 
     wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, lostID)
