@@ -22,6 +22,8 @@ func main() {
 	// `go run main.go -id=our_id`
 	id := setup.GetNodeID()
 
+	
+
 	// CHANNELS
 	// Må gjøre worldview private
 
@@ -46,7 +48,7 @@ func main() {
 	assignerToFsmCh := make(chan [4][3]bool, 1) //Hardkodet ENDRE
 
 	// Endret: peerUpdateCh returneres ikke lenger, se setup.go
-	_, lostPeerIdCh := setup.StartPeerDiscovery(id)
+	newPeerIdCh, lostPeerIdCh := setup.StartPeerDiscovery(id)
 
 	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
 
@@ -67,7 +69,7 @@ func main() {
 		}
 	}()
 
-	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, lostPeerIdCh, cabBtnCh, hallBtnCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
+	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, newPeerIdCh, lostPeerIdCh, cabBtnCh, hallBtnCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
 
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
 
