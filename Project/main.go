@@ -31,7 +31,7 @@ func main() {
 	elevatorToWorldviewCh := make(chan fsm.ElevatorState)
 	syncToWorldviewCh := make(chan wv.HallOrders, 1)
 	networkToWorldviewCh := make(chan wv.Worldview)
-	assignerToWordviewCh := make(chan map[string][4][3]bool, 1)
+	assignerToWordviewCh := make(chan map[string]wv.HallRequestsMatrix, 1)
 	cabBtnCh := make(chan int, 8)
 	hallBtnCh := make(chan [2]int, 8)
 
@@ -45,7 +45,7 @@ func main() {
 	lightsOffCh := make(chan [2]int)
 
 	// From assigner
-	assignerToFsmCh := make(chan [4][3]bool, 1) //Hardkodet ENDRE
+	assignerToFsmCh := make(chan wv.HallRequestsMatrix, 1) //Hardkodet ENDRE
 
 	// Endret: peerUpdateCh returneres ikke lenger, se setup.go
 	newPeerIdCh, lostPeerIdCh := setup.StartPeerDiscovery(id)

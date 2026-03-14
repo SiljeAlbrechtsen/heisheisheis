@@ -5,52 +5,7 @@ import (
 	"time"
 )
 
-/*
-// Endret: Har satt ownerID som string
-
-TODO
-Lage setOwnerId.
-Må LEGGE TIL Case fra channel fra assigner som kjører funk
-Assigner kjøres kontinuerlig, så vil den ta opp hele worldview eller går det bra
-Evt bare sende når noe endres.
-
-  1. Sync sørger for at alle er enige om at en ordre er Confirmed — men setter OwnerID = NoOwner
-  2. Assigner kjøres lokalt på hver heis med samme input → produserer samme resultat
-  3. updateOwnerIDsFromAssignment setter OwnerID basert på assignerens resultat
-  4. Worldview broadcastes → alle ender opp med samme OwnerID
-
-BUG? Endret slik at sync ikke setter ownerID til noOwner for da blir den nullet hele tiden.
-
-
-// Er det noe som setter ordrene til død heis til unconfirmed og peer dead ?
-
-Hvis vi har flere mottakere på en channel vil bare den som var først klar, motta verdien.
-De fungerer ved at de "leser av en jobbkø" elns
-
-  1. myWorldview.IdElevator ble aldri satt til myID
-  2. assignerToWordviewCh — ingen leste fra den (deadlock). Løst ved å koble den til worldview og bruke den til å sette OwnerID via updateOwnerIDsFromAssignment
-  3. FindFloorFromRequest returnerte 0 i stedet for -1 når ingen ordre
-  4. Sync overskrev OwnerID med NoOwner ved Confirmed-overgang
-  5. peerUpdateCh hadde to lesere, så noen peer-death events ble tapt
-
-
-  FSM beveger seg (leser ikke requests)
-      → Assigner får ny worldview, regner ut, sender på assignerToFsmCh
-      → Ingen leser assignerToFsmCh → Assigner blokkerer
-      → Worldview prøver å sende ny worldview til assigner
-      → Assigner kan ikke motta (blokkert) → Worldview blokkerer
-      → FSM prøver å sende etasjeoppdatering til worldview
-      → Worldview kan ikke motta (blokkert) → FSM blokkerer
-      → DEADLOCK
-Fikset med buffret channel
-
-
-  Bug: elevio.SetMotorDirection kalles aldri i FSM2
-FSM/FSM.go — elevio.SetMotorDirection aldri kalt i FSM2
-  UpdateDirection oppdaterer bare intern state og sender til worldview — den starter ikke motoren fysisk. Lagt til SetMotorDirection-kall på fire steder: når ingen ordre, når retning settes fra
-  requests-casen, ved ankomst, og når retning settes fra floorTicker-casen.
-*/
-
+// TODO: Blir det riktig å definere HallRequestsMatrix i state.go? For den er med hele veien, men den oppdateres flere steder, så kan komme race conditions? Og sånn er det samme info som ligger på de? Må tenke
 //______________________________________________________________________________________________________
 //----------------  Structs ----------------------------------------------------------------------------
 //______________________________________________________________________________________________________
@@ -59,6 +14,8 @@ const (
 	Directions = 2
 	NumFloors  = 4
 )
+
+type HallRequestsMatrix [NumFloors][fsm.N_BUTTONS]bool
 
 // Brukes til OwnerID
 const (
@@ -223,7 +180,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
 // Når worldview oppdateres skal sendWorldviewsToOtherModules kjøres
 
 // Endret, lagt til. Den er litt feil tror jeg for den setter bare ownerID til vår egen heis og ikke de ordrene som blir tatt av andre heiser
-func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string][4][3]bool) HallOrders {
+func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string]HallRequestsMatrix) HallOrders {
 	ho := hallOrders
 	for floor := 0; floor < NumFloors; floor++ {
 		for dir := 0; dir < Directions; dir++ {
@@ -251,7 +208,7 @@ func GoroutineForWorldview(
 	cabBtnCh <-chan int,
 	hallBtnCh <-chan [2]int,
 
-	assignerToWorldviewCh <-chan map[string][4][3]bool,
+	assignerToWorldviewCh <-chan map[string]HallRequestsMatrix,
 
 	worldviewToAssignerCh chan<- map[string]Worldview,
 	worldviewToSyncCh chan<- map[string]Worldview,
@@ -327,43 +284,17 @@ func GoroutineForWorldview(
 //------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
 //___________________________________________________________________________
 
-/*
-type HallOrdersPublic [NumFloors][Directions]Order
-
-type TransferWorldview struct {
-	IdElevator  string
-	HallOrders  HallOrders
-	State       fsm.ElevatorState
-	MycabOrders [NumFloors]bool
-}
-
-func copyWorldview(worldview Worldview) TransferWorldview {
-	return TransferWorldview{
-		IdElevator:  worldview.IdElevator,
-		HallOrders:  worldview.HallOrders,
-		State:       worldview.State,
-		MycabOrders: worldview.MycabOrders,
-	}
-}
-
-func copyWorldviews(latestWorldviews map[string]Worldview) map[string]TransferWorldview {
-	copied := make(map[string]TransferWorldview, len(latestWorldviews))
-	for id, worldview := range latestWorldviews {
-		copied[id] = copyWorldview(worldview)
-	}
-	return copied
-}
-*/
 
 // Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
 func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
 	lwv := latestWorldviews
+
 	lostWorldview := lwv[lostID]
-	lostWorldview.State.Error = true
+	lostWorldview.ErrorState = true
+	lwv[lostID] = lostWorldview
+
 	wv := lwv[myID]
-
 	wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, lostID)
-
 	lwv[myID] = wv
 
 	return lwv

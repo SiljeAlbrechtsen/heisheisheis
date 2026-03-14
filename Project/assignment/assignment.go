@@ -82,6 +82,9 @@ func buildInputHallRequestAssigner(latestWorldviews map[string]wv.Worldview, MyI
 
 	states := make(map[string]stateInputJSON)
 	for id, worldview := range latestWorldviews {
+		if worldview.ErrorState {
+			continue
+		}
 		states[id] = buildState(worldview)
 	}
 
@@ -101,7 +104,7 @@ func convertWorldviewToJSON(latestWorldviews map[string]wv.Worldview, MyID strin
 }
 
 // Eller bare assignRequests, siden den sier noe om caborders også?
-func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (map[string][4][3]bool, error) {
+func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (map[string]wv.HallRequestsMatrix, error) {
 	jsonInput, err := convertWorldviewToJSON(latestWorldviews, MyID)
 	if err != nil {
 		return nil, err
@@ -122,7 +125,7 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (
 	}
 
 	// Pakke ut JSON. Evt i annen funk?
-	var result map[string][4][3]bool
+	var result map[string]wv.HallRequestsMatrix
 	err = json.Unmarshal(output, &result)
 
 	return result, nil
@@ -132,10 +135,10 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (
 func RunHallRequestAssigner(
 	myID string,
 	worldviewToAssignerCh <-chan map[string]wv.Worldview,
-	assignerToFsmCh chan<- [4][3]bool,
-	assignerToWordviewCh chan<- map[string][4][3]bool,
+	assignerToFsmCh chan<- wv.HallRequestsMatrix,
+	assignerToWordviewCh chan<- map[string]wv.HallRequestsMatrix,
 ) {
-	var lastResult map[string][4][3]bool
+	var lastResult map[string]wv.HallRequestsMatrix
 	for {
 		latestWorldviews := <-worldviewToAssignerCh
 		//fmt.Println("Assigner: mottok worldview")
