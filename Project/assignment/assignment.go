@@ -94,25 +94,21 @@ func buildInputHallRequestAssigner(latestWorldviews map[string]wv.Worldview, MyI
 	}
 }
 
-func convertWorldviewToJSON(latestWorldviews map[string]wv.Worldview, MyID string) ([]byte, error) {
-	input := buildInputHallRequestAssigner(latestWorldviews, MyID)
-	data, err := json.Marshal(input)
-	if err != nil {
-		return nil, err
-	}
-	return append(data, '\n'), nil
-}
-
 // Eller bare assignRequests, siden den sier noe om caborders også?
 func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (map[string][4][3]bool, error) {
-	jsonInput, err := convertWorldviewToJSON(latestWorldviews, MyID)
+	input := buildInputHallRequestAssigner(latestWorldviews, MyID)
+	if len(input.States) == 0 {
+		return nil, fmt.Errorf("ingen tilgjengelige heiser (alle i error state)")
+	}
+
+	jsonInput, err := json.Marshal(input)
 	if err != nil {
 		return nil, err
 	}
+	jsonInput = append(jsonInput, '\n')
 
 	// Sende til hall request assigner og få svar
 	var stderr bytes.Buffer
-	//fmt.Println("JSON sendt til assigner:", string(jsonInput))
 	cmd := exec.Command("./assignment/hall_request_assigner")
 	cmd.Stdin = bytes.NewReader(jsonInput)
 	cmd.Stderr = &stderr

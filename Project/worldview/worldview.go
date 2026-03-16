@@ -264,6 +264,7 @@ func GoroutineForWorldview(
 	myWorldview := worldviewsMap[myID]
 	myWorldview.IdElevator = myID
 	worldviewsMap[myID] = myWorldview
+	myWorldview.ErrorState = false
 
 	copyMap := func(m map[string]Worldview) map[string]Worldview {
 		c := make(map[string]Worldview, len(m))
