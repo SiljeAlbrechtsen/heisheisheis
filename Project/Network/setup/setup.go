@@ -28,7 +28,7 @@ func TransmitWorldviewPeriodically(worldviewTx chan<- wv.Worldview, worldviewToN
 			WorldviewMsg = newMsg
 
 		// sender worldview etter 1 sek
-		case <-time.After(1 * time.Second):
+		case <-time.After(100 * time.Millisecond):
 			worldviewTx <- WorldviewMsg
 		}
 	}
