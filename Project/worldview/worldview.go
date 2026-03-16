@@ -204,15 +204,6 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
 		return wv
 	}
 
-	if inputStateElevator.Dirn == fsm.D_Stop {
-		return wv
-	}
-
-	dir := dirToIndex(inputStateElevator.Dirn)
-	if wv.HallOrders[floor][dir].SyncState == Confirmed {
-		wv.HallOrders[floor][dir].SyncState = DeleteProposed
-	}
-
 	return wv
 }
 
