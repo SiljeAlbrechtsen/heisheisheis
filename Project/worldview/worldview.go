@@ -280,6 +280,10 @@ func GoroutineForWorldview(
 
 		case inputStateElevator := <-elevatorToWorldviewCh:
 			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator)
+			if myWorldview.AllCabOrders == nil {
+				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
+			}
+			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- worldviewsMap[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
@@ -306,6 +310,10 @@ func GoroutineForWorldview(
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = addNewCabOrder(myWorldview, inputCabBtn)
+			if myWorldview.AllCabOrders == nil {
+				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
+			}
+			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- worldviewsMap[myID]
 			worldviewToAssignerCh <- copyMap(worldviewsMap)

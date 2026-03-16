@@ -1,8 +1,8 @@
 package assignment
 
 import (
-	wv "Project/worldview"
 	fsm "Project/FSM"
+	wv "Project/worldview"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -15,13 +15,13 @@ import (
 // Bytte navn?
 type hallRequestsInputJSON struct {
 	HallRequests [wv.NumFloors][wv.Directions]bool `json:"hallRequests"`
-	States       map[string]stateInputJSON          `json:"states"`
+	States       map[string]stateInputJSON         `json:"states"`
 }
 
 type stateInputJSON struct {
-	Behaviour   string            `json:"behaviour"`
-	Floor       int               `json:"floor"`
-	Direction   string            `json:"direction"`
+	Behaviour   string             `json:"behaviour"`
+	Floor       int                `json:"floor"`
+	Direction   string             `json:"direction"`
 	CabRequests [wv.NumFloors]bool `json:"cabRequests"`
 }
 
@@ -143,10 +143,10 @@ func RunHallRequestAssigner(
 			fmt.Println("Assigner feil:", err)
 			continue
 		}
-		fmt.Println("Assigner: sender til FSM:", result[myID])
-		assignerToFsmCh <- result[myID]
 		// reflect.DeepEqual er med i standard bib. i go og brukes for å sammenligne maps.
 		if !reflect.DeepEqual(result, lastResult) {
+			fmt.Println("Assigner: sender til FSM:", result[myID])
+			assignerToFsmCh <- result[myID]
 			assignerToWordviewCh <- result
 			lastResult = result
 		}
