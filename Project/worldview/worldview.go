@@ -3,6 +3,7 @@ package worldview
 import (
 	fsm "Project/FSM"
 	"time"
+	"fmt"
 )
 
 
@@ -270,7 +271,9 @@ func GoroutineForWorldview(
 			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- worldviewsMap[myID]
+			fmt.Println("[Worldview] AllCabOrders etter cab-bestilling:", myWorldview.AllCabOrders)
 			worldviewToAssignerCh <- copyMap(worldviewsMap)
+
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
