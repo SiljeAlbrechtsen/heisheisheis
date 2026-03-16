@@ -322,6 +322,7 @@ func GoroutineForWorldview(
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
 			worldviewsMap[myID] = myWorldview
+			worldviewToNetworkCh <- worldviewsMap[myID]
 		}
 
 	}
