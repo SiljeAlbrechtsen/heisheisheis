@@ -1,8 +1,20 @@
 package fsm
 
 type DirnBehaviourPair struct {
-	Dirn            Direction
+	Dirn              Direction
 	ElevatorBehaviour Behaviour
+}
+
+// A-Sjekker om det er noen bestillinger i systemet
+func requests_checkForRequests(e ElevatorState) bool {
+	for f := 0; f < N_FLOORS; f++ {
+		for b := 0; b < N_BUTTONS; b++ {
+			if e.Requests[f][b] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // requests_above returns true if there are any requests above current floor
@@ -79,21 +91,26 @@ func requests_chooseDirection(e ElevatorState) DirnBehaviourPair {
 
 // requests_shouldStop (exact C logic)
 func requests_shouldStop(e ElevatorState) bool {
+
+	if e.Behaviour == EB_DoorOpen {
+		return true
+	} //A-TO DO: Sjekk om denne er kanskje unødvendig
+
 	switch e.Dirn {
 	case D_Down:
 		return e.Requests[e.Floor][B_HallDown] ||
 			e.Requests[e.Floor][B_Cab] ||
-			!requests_below(e)
+			!requests_below(e) //A-Sjekker om det er bestilling i cab, hall, eller under oss
 
 	case D_Up:
 		return e.Requests[e.Floor][B_HallUp] ||
 			e.Requests[e.Floor][B_Cab] ||
-			!requests_above(e)
+			!requests_above(e) //A-Sjekker om det er bestilling i cab, hall, eller over oss
 
 	case D_Stop:
 		fallthrough
 	default:
-		return true
+		return true //Defaul så stopper heisen
 	}
 }
 
@@ -104,6 +121,26 @@ func requests_shouldClearImmediately(e ElevatorState, btnFloor int, btnType Butt
 			(e.Dirn == D_Down && btnType == B_HallDown) ||
 			e.Dirn == D_Stop ||
 			btnType == B_Cab)
+}
+
+func requests_shouldServeCurrentFloor(e ElevatorState) bool {
+	switch e.Dirn {
+	case D_Up:
+		return e.Requests[e.Floor][B_HallUp] ||
+			e.Requests[e.Floor][B_Cab] ||
+			(!requests_above(e) && e.Requests[e.Floor][B_HallDown])
+
+	case D_Down:
+		return e.Requests[e.Floor][B_HallDown] ||
+			e.Requests[e.Floor][B_Cab] ||
+			(!requests_below(e) && e.Requests[e.Floor][B_HallUp])
+
+	case D_Stop:
+		return requests_here(e)
+
+	default:
+		return false
+	}
 }
 
 // requests_clearAtCurrentFloor (exact C logic, returns new Elevator)

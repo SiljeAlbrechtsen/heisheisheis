@@ -2,58 +2,31 @@ package fsm
 
 import (
 	elevio "Project/Driver"
+	t "Project/types"
 )
 
-const N_FLOORS = 4
-const N_BUTTONS = 3
+const N_FLOORS = t.N_FLOORS
+const N_BUTTONS = t.N_BUTTONS
 
-type Button int
+type Button = t.Button
+type Behaviour = t.Behaviour
+type Direction = t.Direction
+type ElevatorState = t.ElevatorState
 
-const (
-	B_HallUp Button = iota
-	B_HallDown
-	B_Cab
-)
+const B_HallUp = t.B_HallUp
+const B_HallDown = t.B_HallDown
+const B_Cab = t.B_Cab
 
-type Behaviour int
+const EB_Idle = t.EB_Idle
+const EB_DoorOpen = t.EB_DoorOpen
+const EB_Moving = t.EB_Moving
 
-const (
-	EB_Idle Behaviour = iota
-	EB_DoorOpen
-	EB_Moving
-)
+const D_Down = t.D_Down
+const D_Stop = t.D_Stop
+const D_Up = t.D_Up
 
-type Direction int
-
-const (
-	D_Down Direction = -1
-	D_Stop Direction = 0
-	D_Up   Direction = 1
-)
-
-type ElevatorState struct {
-	Floor     int
-	Dirn      Direction
-	Behaviour Behaviour
-	Requests  [N_FLOORS][N_BUTTONS]bool
-	Error     bool
-	config    struct {
-		doorOpenDuration_s float64
-	}
-}
-
-func InitElevatorState() ElevatorState { //lager en state
-	addr := resolveElevatorAddr()
-	elevio.Init(addr, N_FLOORS)
-	return ElevatorState{
-		Floor:     -1,
-		Dirn:      D_Stop,
-		Behaviour: EB_Idle,
-		Error: false,
-		config: struct {
-			doorOpenDuration_s float64
-		}{doorOpenDuration_s: 3.0},
-	}
+func InitElevatorState() ElevatorState { //A-TO DO: Sjekk om det trenges stor forbokstav
+	return t.InitElevatorState()
 }
 
 //////////////Opdater state og send til worldview/////////////////////
@@ -65,34 +38,71 @@ func sendState(elevatorState *ElevatorState, elevatorStateCh chan ElevatorState)
 	}
 }
 
-func UpdateFloor(floor int, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+func updateFloor(floor int, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+	elevio.SetFloorIndicator(elevio.GetFloor())
 	if elevatorState.Floor == floor {
 		return
 	}
+
+	if floor == 0 && elevatorState.Dirn == D_Down || floor == N_FLOORS-1 && elevatorState.Dirn == D_Up {
+		elevio.SetMotorDirection(elevio.MD_Stop)
+		elevatorState.Dirn = D_Stop
+	}
+
 	elevatorState.Floor = floor
 	sendState(elevatorState, elevatorStateCh)
 }
 
-func UpdateDirection(direction Direction, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+// A-Tar i mot retning og oppdaterer state+channel til wv
+func updateDirection(direction Direction, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
 	if elevatorState.Dirn == direction {
 		return
 	}
 	elevatorState.Dirn = direction
+	elevio.SetMotorDirection(elevio.MotorDirection(direction)) //A-TO DO: Sjekk om det trenges type konvertering og heller endre elevio sin type til å bruke vår Direction type
 	sendState(elevatorState, elevatorStateCh)
 }
 
-func UpdateBehaviour(behaviour Behaviour, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+func updateBehaviour(behaviour Behaviour, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
 	if elevatorState.Behaviour == behaviour {
 		return
+	}
+	if behaviour == EB_DoorOpen {
+		elevio.SetDoorOpenLamp(true)
+	} else {
+		elevio.SetDoorOpenLamp(false)
 	}
 	elevatorState.Behaviour = behaviour
 	sendState(elevatorState, elevatorStateCh)
 }
 
-func UpdateRequests(requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+func updateRequests(requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
 	if elevatorState.Requests == requests {
 		return
 	}
 	elevatorState.Requests = requests
 	sendState(elevatorState, elevatorStateCh)
+}
+
+func updateBehaviourAndRequests(behaviour Behaviour, requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+	changed := false
+
+	if behaviour == EB_DoorOpen {
+		elevio.SetDoorOpenLamp(true)
+	} else {
+		elevio.SetDoorOpenLamp(false)
+	}
+	if elevatorState.Behaviour != behaviour {
+		elevatorState.Behaviour = behaviour
+		changed = true
+	}
+
+	if elevatorState.Requests != requests {
+		elevatorState.Requests = requests
+		changed = true
+	}
+
+	if changed {
+		sendState(elevatorState, elevatorStateCh)
+	}
 }

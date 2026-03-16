@@ -26,3 +26,25 @@ func ButtonsListener(cabButtonCh chan int, hallButtonCh chan [2]int) {
 		}
 	}
 }
+
+func LightsListener(lightOnCh chan [2]int, lightsOffCh chan [2]int) {
+
+	for {
+		select {
+		case a := <-lightOnCh:
+			fmt.Println("--------------\nLIGHT ON: ", a, "\n---------------")
+			elevio.SetButtonLamp(elevio.ButtonType(a[1]), a[0], true)
+		case a := <-lightsOffCh:
+			fmt.Println("--------------\nLIGHT OFF: ", a, "\n---------------")
+			elevio.SetButtonLamp(elevio.ButtonType(a[1]), a[0], false)
+		}
+	}
+}
+
+func TurnOffAllLights() { //A-La til en slå av alle lys ed init
+	for f := 0; f < 4; f++ { //A-TO DO: Fjern hardkoding
+		for b := elevio.ButtonType(0); b < 3; b++ {
+			elevio.SetButtonLamp(b, f, false)
+		}
+	}
+}

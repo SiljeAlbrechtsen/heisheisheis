@@ -1,9 +1,11 @@
 package elevio
 
-import "time"
-import "sync"
-import "net"
-import "fmt"
+import (
+	"fmt"
+	"net"
+	"sync"
+	"time"
+)
 
 
 
@@ -162,6 +164,10 @@ func GetObstruction() bool {
 func read(in [4]byte) [4]byte {
 	_mtx.Lock()
 	defer _mtx.Unlock()
+
+	if !_initialized || _conn == nil {
+		panic("Elevator driver not initialized")
+	}
 	
 	_, err := _conn.Write(in[:])
 	if err != nil { panic("Lost connection to Elevator Server") }
@@ -176,6 +182,10 @@ func read(in [4]byte) [4]byte {
 func write(in [4]byte) {
 	_mtx.Lock()
 	defer _mtx.Unlock()
+
+	if !_initialized || _conn == nil {
+		panic("Elevator driver not initialized")
+	}
 	
 	_, err := _conn.Write(in[:])
 	if err != nil { panic("Lost connection to Elevator Server") }
