@@ -5,51 +5,6 @@ import (
 	"time"
 )
 
-/*
-// Endret: Har satt ownerID som string
-
-TODO
-Lage setOwnerId.
-Må LEGGE TIL Case fra channel fra assigner som kjører funk
-Assigner kjøres kontinuerlig, så vil den ta opp hele worldview eller går det bra
-Evt bare sende når noe endres.
-
-  1. Sync sørger for at alle er enige om at en ordre er Confirmed — men setter OwnerID = NoOwner
-  2. Assigner kjøres lokalt på hver heis med samme input → produserer samme resultat
-  3. updateOwnerIDsFromAssignment setter OwnerID basert på assignerens resultat
-  4. Worldview broadcastes → alle ender opp med samme OwnerID
-
-BUG? Endret slik at sync ikke setter ownerID til noOwner for da blir den nullet hele tiden.
-
-
-// Er det noe som setter ordrene til død heis til unconfirmed og peer dead ?
-
-Hvis vi har flere mottakere på en channel vil bare den som var først klar, motta verdien.
-De fungerer ved at de "leser av en jobbkø" elns
-
-  1. myWorldview.IdElevator ble aldri satt til myID
-  2. assignerToWordviewCh — ingen leste fra den (deadlock). Løst ved å koble den til worldview og bruke den til å sette OwnerID via updateOwnerIDsFromAssignment
-  3. FindFloorFromRequest returnerte 0 i stedet for -1 når ingen ordre
-  4. Sync overskrev OwnerID med NoOwner ved Confirmed-overgang
-  5. peerUpdateCh hadde to lesere, så noen peer-death events ble tapt
-
-
-  FSM beveger seg (leser ikke requests)
-      → Assigner får ny worldview, regner ut, sender på assignerToFsmCh
-      → Ingen leser assignerToFsmCh → Assigner blokkerer
-      → Worldview prøver å sende ny worldview til assigner
-      → Assigner kan ikke motta (blokkert) → Worldview blokkerer
-      → FSM prøver å sende etasjeoppdatering til worldview
-      → Worldview kan ikke motta (blokkert) → FSM blokkerer
-      → DEADLOCK
-Fikset med buffret channel
-
-
-  Bug: elevio.SetMotorDirection kalles aldri i FSM2
-FSM/FSM.go — elevio.SetMotorDirection aldri kalt i FSM2
-  UpdateDirection oppdaterer bare intern state og sender til worldview — den starter ikke motoren fysisk. Lagt til SetMotorDirection-kall på fire steder: når ingen ordre, når retning settes fra
-  requests-casen, ved ankomst, og når retning settes fra floorTicker-casen.
-*/
 
 //______________________________________________________________________________________________________
 //----------------  Structs ----------------------------------------------------------------------------
@@ -256,6 +211,7 @@ func GoroutineForWorldview(
 	myWorldview.IdElevator = myID
 	worldviewsMap[myID] = myWorldview
 	myWorldview.ErrorState = false
+	myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 
 	copyMap := func(m map[string]Worldview) map[string]Worldview {
 		c := make(map[string]Worldview, len(m))
@@ -309,10 +265,8 @@ func GoroutineForWorldview(
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputCabBtn := <-cabBtnCh:
-			myWorldview = addNewCabOrder(myWorldview, inputCabBtn)
-			if myWorldview.AllCabOrders == nil {
-				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
-			}
+			myWorldview = addNewCabOrder(myWorldview, inputCabBtn, myID)
+
 			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- worldviewsMap[myID]
@@ -379,8 +333,12 @@ func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID s
 	return lwv
 }
 
-func addNewCabOrder(worldview Worldview, inputCabBtn int) Worldview {
+func addNewCabOrder(worldview Worldview, inputCabBtn int, myID string) Worldview {
 	wv := worldview
+
+	cabOrders := wv.AllCabOrders[myID]
+	cabOrders[inputCabBtn] = true
+	wv.AllCabOrders[myID] = cabOrders 
 
 	wv.MycabOrders[inputCabBtn] = true
 
