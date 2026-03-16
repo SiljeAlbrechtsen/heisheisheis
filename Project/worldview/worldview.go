@@ -253,6 +253,13 @@ func GoroutineForWorldview(
 
 		case inputPeerWorldview := <-networkToWorldviewCh:
 			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
+			if inputPeerWorldview.IdElevator != myID {
+				if myWorldview.AllCabOrders == nil {
+					myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
+				}
+				myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.MycabOrders
+				worldviewsMap[myID] = myWorldview
+			}
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputDeadPeer := <-lostPeerIdCh:
