@@ -1,11 +1,15 @@
 package main
 
+//A-To do: Fikse at lights on sender caborders lys, sender kun hallorders atm. Også sender off signal dårlig.
+
+
 import (
 	fsm "Project/FSM"
 	hardware "Project/Hardware"
 	"Project/Network/setup"
 	assign "Project/assignment"
 	sync "Project/synchronization"
+	t "Project/types"
 	wv "Project/worldview"
 
 	//"flag"
@@ -14,15 +18,13 @@ import (
 	//"time"
 )
 
-
 // TODO: må vi ha strl på input-variabler?
 
 func main() {
+	t.InitDriver()
 
 	// `go run main.go -id=our_id`
 	id := setup.GetNodeID()
-
-	
 
 	// CHANNELS
 	// Må gjøre worldview private
@@ -45,7 +47,7 @@ func main() {
 	lightsOffCh := make(chan [2]int)
 
 	// From assigner
-	assignerToFsmCh := make(chan [4][3]bool, 1) //Hardkodet ENDRE
+	assignerToFsmCh := make(chan [4][3]bool, 1)
 
 	// Endret: peerUpdateCh returneres ikke lenger, se setup.go
 	newPeerIdCh, lostPeerIdCh := setup.StartPeerDiscovery(id)
@@ -58,22 +60,13 @@ func main() {
 
 	go sync.GoRoutineSync(id, syncToWorldviewCh, worldviewToSyncCh, lightOnCh, lightsOffCh)
 
-	go func() {
-		for {
-			select {
-			case btn := <-lightOnCh:
-				_ = btn
-			case btn := <-lightsOffCh:
-				_ = btn
-			}
-		}
-	}()
+	go hardware.LightsListener(lightOnCh, lightsOffCh)
 
 	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, newPeerIdCh, lostPeerIdCh, cabBtnCh, hallBtnCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
 
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
 
-	go fsm.FSM2(assignerToFsmCh, elevatorToWorldviewCh)
+	go fsm.FSM3(assignerToFsmCh, elevatorToWorldviewCh)
 
 	fmt.Println("Started")
 

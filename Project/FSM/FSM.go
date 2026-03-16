@@ -8,7 +8,6 @@ import (
 
 	elevio "Project/Driver"
 	Hardware "Project/Hardware"
-	t "Project/types"
 )
 
 func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
@@ -32,7 +31,7 @@ func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
 	sendState(elevator, elevatorStateCh)
 }
 
-func updateElevatorRequests(elevatorState ElevatorState, newRequests t.HallRequestsMatrix) ElevatorState {
+func updateElevatorRequests(elevatorState ElevatorState, newRequests [4][3]bool) ElevatorState {
 	for f := 0; f < N_FLOORS; f++ {
 		for b := 0; b < N_BUTTONS; b++ {
 			if newRequests[f][b] {
@@ -45,7 +44,7 @@ func updateElevatorRequests(elevatorState ElevatorState, newRequests t.HallReque
 
 ////////////////////////////////////////////////////////////////////////////
 
-func FSM3(assignerToFsmCh chan t.HallRequestsMatrix, elevatorStateCh chan ElevatorState) {
+func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 	elevatorState := InitElevatorState()
 	InitElevator(&elevatorState, elevatorStateCh)
@@ -172,7 +171,7 @@ func serveCurrentFloorNow(elevatorState ElevatorState, elevatorStateCh chan Elev
 
 //////Gammel//////
 /*
-func FSM2(assignerToFsmCh chan t.HallRequestsMatrix, elevatorStateCh chan ElevatorState, stopBtnCh chan bool) {
+func FSM2(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, stopBtnCh chan bool) {
 
 	elevatorState := InitElevatorState()
 
