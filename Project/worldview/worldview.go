@@ -280,6 +280,11 @@ func GoroutineForWorldview(
 			if init == myID {
 				myWorldview = worldviewInit(myID, myWorldview, networkToWorldviewCh)
 				worldviewsMap[myID] = myWorldview
+			} else {
+				if existing, ok := worldviewsMap[init]; ok {
+					existing.ErrorState = false
+					worldviewsMap[init] = existing
+				}
 			}
 
 		case inputStateElevator := <-elevatorToWorldviewCh:
@@ -358,6 +363,9 @@ func copyWorldviews(latestWorldviews map[string]Worldview) map[string]TransferWo
 
 // Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
 func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
+	if lostID == myID {
+		return latestWorldviews
+	}
 	lwv := latestWorldviews
 	lostWorldview := lwv[lostID]
 	lostWorldview.ErrorState = true
