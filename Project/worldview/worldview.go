@@ -359,9 +359,10 @@ func copyWorldviews(latestWorldviews map[string]Worldview) map[string]TransferWo
 func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
 	lwv := latestWorldviews
 	lostWorldview := lwv[lostID]
-	lostWorldview.State.Error = true
-	wv := lwv[myID]
+	lostWorldview.ErrorState = true
+	lwv[lostID] = lostWorldview
 
+	wv := lwv[myID]
 	wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, lostID)
 
 	lwv[myID] = wv

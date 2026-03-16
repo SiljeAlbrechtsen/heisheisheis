@@ -78,6 +78,9 @@ func syncHallOrders(
 			case wv.Unconfirmed:
 				allAgree := true
 				for _, peer := range latestWorldviews {
+					if peer.ErrorState {
+						continue
+					}
 					if peer.HallOrders[f][d].SyncState != wv.Unconfirmed {
 						allAgree = false
 						break
@@ -91,6 +94,9 @@ func syncHallOrders(
 			case wv.DeleteProposed:
 				allAgree := true
 				for _, peer := range latestWorldviews {
+					if peer.ErrorState {
+						continue
+					}					
 					peerState := peer.HallOrders[f][d].SyncState
 					if peerState != wv.DeleteProposed && peerState != wv.None {
 						allAgree = false
