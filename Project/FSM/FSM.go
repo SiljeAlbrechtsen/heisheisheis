@@ -46,7 +46,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 		case <-doorTimer:
 			doorTimer = nil
 			if elevatorState.Error {
-				fmt.Println("Y")
+				//fmt.Println("Y")
 				doorTimer = time.After(3000 * time.Millisecond)
 			}
 			if requests_shouldServeCurrentFloor(elevatorState) {
@@ -57,6 +57,8 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 			applyDecision(db, &elevatorState, elevatorStateCh)
 
 		case <-floorTicker.C: // alt av heis logikk
+
+			refreshCabLights(elevatorState)
 
 			if elevio.GetFloor() != -1 {
 				updateFloor(elevio.GetFloor(), &elevatorState, elevatorStateCh)
@@ -193,5 +195,15 @@ func sendLatestBool(ch chan bool, v bool) {
 		default:
 		}
 		ch <- v
+	}
+}
+
+func refreshCabLights(e ElevatorState) {
+	for f := 0; f < N_FLOORS; f++ {
+		if e.Requests[f][B_Cab] {
+			elevio.SetButtonLamp(elevio.BT_Cab, f, true)
+		} else {
+			elevio.SetButtonLamp(elevio.BT_Cab, f, false)
+		}
 	}
 }
