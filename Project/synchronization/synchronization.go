@@ -89,6 +89,10 @@ func syncHallOrders(
 				}
 				if allAgree {
 					myHallOrders[f][d].SyncState = wv.Confirmed
+					// Hvis ordnen hadde OwnerID = PeerDied, reset den slik Assigner kan re-assign
+					if myHallOrders[f][d].OwnerID == wv.PeerDied {
+						myHallOrders[f][d].OwnerID = wv.NoOwner
+					}
 					lightsOnCh <- [2]int{f, d}
 				}
 

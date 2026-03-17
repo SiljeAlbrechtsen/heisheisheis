@@ -17,7 +17,6 @@ Teste mer
 
 */
 
-
 //______________________________________________________________________________________________________
 //----------------  Structs ----------------------------------------------------------------------------
 //______________________________________________________________________________________________________
@@ -66,7 +65,7 @@ func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Wo
 	myWv := myWorldview
 	timeout := time.After(1 * time.Second)
 	fmt.Println("hei")
-		for {
+	for {
 		select {
 		// Hvis den får andre worldvies
 		case incomingWv := <-networkToInitCh:
@@ -88,9 +87,6 @@ func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Wo
 
 	}
 
-	
-
-
 }
 
 // _____________________________________________________________________________
@@ -111,7 +107,7 @@ func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, input
 	worldviewsMap := latestWorldviews
 	peerID := inputPeerWorldview.IdElevator
 	worldviewsMap[peerID] = inputPeerWorldview
-	
+
 	return worldviewsMap
 }
 
@@ -281,7 +277,7 @@ func GoroutineForWorldview(
 	worldviewToSyncCh chan<- map[string]Worldview,
 	worldviewToNetworkCh chan<- Worldview,
 ) {
-	
+
 	worldviewsMap := make(map[string]Worldview)
 	myWorldview := worldviewsMap[myID]
 	myWorldview.IdElevator = myID
@@ -306,8 +302,6 @@ func GoroutineForWorldview(
 		return c
 	}
 
-
-
 	for {
 		select {
 		case inputStateElevator := <-elevatorToWorldviewCh:
@@ -316,7 +310,6 @@ func GoroutineForWorldview(
 			if myWorldview.AllCabOrders == nil {
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 			}
-
 
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
@@ -341,7 +334,7 @@ func GoroutineForWorldview(
 			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.AllCabOrders[inputPeerWorldview.IdElevator]
 
 			worldviewsMap[myID] = myWorldview
-			DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
+			//DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputDeadPeer := <-lostPeerIdCh:
@@ -360,15 +353,14 @@ func GoroutineForWorldview(
 			myWorldview = worldviewsMap[myID]
 			myWorldview = addNewCabOrder(myWorldview, inputCabBtn, myID)
 
-
 			worldviewsMap[myID] = myWorldview
-			DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
+			//DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview = worldviewsMap[myID]
-			//debugPrintHallOrders("before assignment", myWorldview.HallOrders)	// TO DO: FJERN
+			debugPrintHallOrders("before assignment", myWorldview.HallOrders) // TO DO: FJERN
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
 			//debugPrintHallOrders("after assignment", myWorldview.HallOrders)  // TO DO: FJERN
 			worldviewsMap[myID] = myWorldview
@@ -409,7 +401,6 @@ func addNewCabOrder(worldview Worldview, inputCabBtn int, myID string) Worldview
 	cabOrders[inputCabBtn] = true
 	wv.AllCabOrders[myID] = cabOrders
 
-
 	return wv
 }
 
@@ -428,30 +419,3 @@ func addNewHallOrder(worldview Worldview, inputHallBtn [2]int) Worldview {
 
 	return wv
 }
-
-// Kopierer Worldview-strukturen med sikker locking av AllCabOrders
-/*
-func copyWorldviewWithLocking(src Worldview) Worldview {
-	dst := src
-	src.mu.RLock()
-	defer src.mu.RUnlock()
-
-	// Deep copy av AllCabOrders
-	if src.AllCabOrders != nil {
-		dst.AllCabOrders = make(map[string][NumFloors]bool, len(src.AllCabOrders))
-		for id, orders := range src.AllCabOrders {
-			dst.AllCabOrders[id] = orders
-		}
-	}
-	return dst
-}
-
-// Kopierer hele worldviews-mappen med sikker locking
-func copyWorldviewsMapWithLocking(src map[string]Worldview) map[string]Worldview {
-	dst := make(map[string]Worldview, len(src))
-	for id, wv := range src {
-		dst[id] = copyWorldviewWithLocking(wv)
-	}
-	return dst
-}
-*/
