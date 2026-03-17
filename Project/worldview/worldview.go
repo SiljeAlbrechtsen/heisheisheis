@@ -2,6 +2,7 @@ package worldview
 
 import (
 	fsm "Project/FSM"
+	t "Project/types"
 	"fmt"
 
 	//"sync"
@@ -33,23 +34,18 @@ const (
 )
 
 // type CabOrders [NumFloors]bool // Må vel ikke deklareres først?
-type OrderSyncState int
+type OrderSyncState = t.OrderSyncState
 
 const (
-	None OrderSyncState = iota
-	// En heis setter til unconfirmed. Når de andre er enige så setter de til confirmed.
-	Unconfirmed
-	// I confirmed så får den ownerID. Den blir assigned.
-	Confirmed
-	DeleteProposed
+	None           = t.None
+	Unconfirmed    = t.Unconfirmed
+	Confirmed      = t.Confirmed
+	DeleteProposed = t.DeleteProposed
 )
 
-type Order struct {
-	SyncState OrderSyncState
-	OwnerID   string
-}
+type Order = t.Order
 
-type HallOrders [NumFloors][Directions]Order
+type HallOrders = t.HallOrders
 
 // Struct for egen worldview
 type Worldview struct {
@@ -272,6 +268,8 @@ func GoroutineForWorldview(
 	newPeerIdCh <-chan string,
 	cabBtnCh <-chan int,
 	hallBtnCh <-chan [2]int,
+	hallLightsCh chan HallOrders,
+	printHallOrdersReqCh <-chan bool,
 
 	assignerToWorldviewCh <-chan map[string][4][3]bool,
 
@@ -304,6 +302,18 @@ func GoroutineForWorldview(
 		return c
 	}
 
+	sendLatestHallOrders := func(hallOrders HallOrders) {
+		select {
+		case hallLightsCh <- hallOrders:
+		default:
+			select {
+			case <-hallLightsCh:
+			default:
+			}
+			hallLightsCh <- hallOrders
+		}
+	}
+
 	for {
 		select {
 		case inputStateElevator := <-elevatorToWorldviewCh:
@@ -314,12 +324,14 @@ func GoroutineForWorldview(
 			}
 
 			worldviewsMap[myID] = myWorldview
+			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
 			myWorldview = worldviewsMap[myID]
+			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToAssignerCh <- copyMap(worldviewsMap)
 
@@ -352,6 +364,7 @@ func GoroutineForWorldview(
 			myWorldview = worldviewsMap[myID]
 			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
 			worldviewsMap[myID] = myWorldview
+			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
@@ -361,6 +374,7 @@ func GoroutineForWorldview(
 
 			worldviewsMap[myID] = myWorldview
 			//DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
+			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
@@ -369,8 +383,14 @@ func GoroutineForWorldview(
 			debugPrintHallOrders("before assignment", myWorldview.HallOrders) // TO DO: FJERN
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
 			debugPrintHallOrders("after assignment", myWorldview.HallOrders) // TO DO: FJERN
+
 			worldviewsMap[myID] = myWorldview
+			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
+
+		case <-printHallOrdersReqCh:
+			myWorldview = worldviewsMap[myID]
+			debugPrintHallOrders("stop button worldview", myWorldview.HallOrders)
 		}
 
 	}

@@ -8,7 +8,7 @@ import (
 	hardware "Project/Hardware"
 )
 
-func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
+func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, printHallOrdersReqCh chan bool) {
 
 	obstruct := false
 
@@ -80,6 +80,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 		case <-stopBtnCh:
 			fmt.Println(elevatorState)
+			sendLatestBool(printHallOrdersReqCh, true)
 
 		case obstruct = <-obstructCh: //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
 			if doorTimer != nil && obstruct {

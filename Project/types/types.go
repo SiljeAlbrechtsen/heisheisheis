@@ -49,6 +49,22 @@ type ElevatorState struct {
 
 type HallRequestsMatrix [4][3]bool
 
+type OrderSyncState int
+
+const (
+	None OrderSyncState = iota
+	Unconfirmed
+	Confirmed
+	DeleteProposed
+)
+
+type Order struct {
+	SyncState OrderSyncState
+	OwnerID   string
+}
+
+type HallOrders [N_FLOORS][2]Order
+
 func InitDriver() {
 	addr := resolveElevatorAddr()
 	elevio.Init(addr, N_FLOORS)

@@ -2,6 +2,7 @@ package hardware
 
 import (
 	elevio "Project/Driver"
+	t "Project/types"
 	"fmt"
 	"time"
 )
@@ -31,10 +32,10 @@ func LightsListener(lightOnCh chan [2]int, lightsOffCh chan [2]int) { //To DO: F
 		select {
 		case a := <-lightOnCh:
 			fmt.Println("--------------\nLIGHT ON: ", a, "\n---------------")
-			elevio.SetButtonLamp(elevio.ButtonType(a[1]), a[0], true)
+			//elevio.SetButtonLamp(elevio.ButtonType(a[1]), a[0], true)
 		case a := <-lightsOffCh:
 			fmt.Println("--------------\nLIGHT OFF: ", a, "\n---------------")
-			elevio.SetButtonLamp(elevio.ButtonType(a[1]), a[0], false)
+			//elevio.SetButtonLamp(elevio.ButtonType(a[1]), a[0], false)
 		}
 	}
 }
@@ -68,6 +69,16 @@ func ErrorLight(errorLight chan bool) {
 			if blinking {
 				lampOn = !lampOn
 				elevio.SetStopLamp(lampOn)
+			}
+		}
+	}
+}
+
+func LightsListener2(hallLightsCh <-chan t.HallOrders) { //To DO: Fjern printksjon som tar inn en bool for on/off
+	for hallOrders := range hallLightsCh {
+		for f := 0; f < t.N_FLOORS; f++ {
+			for d := 0; d < 2; d++ {
+				elevio.SetButtonLamp(elevio.ButtonType(d), f, hallOrders[f][d].SyncState == t.Confirmed)
 			}
 		}
 	}

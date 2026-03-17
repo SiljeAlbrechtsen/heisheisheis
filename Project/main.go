@@ -36,6 +36,8 @@ func main() {
 	assignerToWordviewCh := make(chan map[string][4][3]bool, 1)
 	cabBtnCh := make(chan int, 8)
 	hallBtnCh := make(chan [2]int, 8)
+	hallLightsCh := make(chan wv.HallOrders, 1)
+	printHallOrdersReqCh := make(chan bool, 1)
 
 	//From worldview
 	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 1)
@@ -54,6 +56,8 @@ func main() {
 
 	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
 
+	go hardware.LightsListener2(hallLightsCh)
+
 	go hardware.ButtonsListener(cabBtnCh, hallBtnCh)
 
 	go setup.TransmitWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
@@ -62,23 +66,23 @@ func main() {
 
 	go hardware.LightsListener(lightOnCh, lightsOffCh)
 
-	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, networkToInitCh, lostPeerIdCh, newPeerIdCh, cabBtnCh, hallBtnCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
+	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, networkToInitCh, lostPeerIdCh, newPeerIdCh, cabBtnCh, hallBtnCh, hallLightsCh, printHallOrdersReqCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
 
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
 
-	go fsm.FSM3(assignerToFsmCh, elevatorToWorldviewCh)
+	go fsm.FSM3(assignerToFsmCh, elevatorToWorldviewCh, printHallOrdersReqCh)
 
 	go setup.ForwardWorldviewFromNetwork(worldviewRx, networkToWorldviewCh, networkToInitCh)
 
 	fmt.Println("Started")
 
-	select{}
-/*
-	for a := range worldviewRx {
-		networkToInitCh <- a
-		networkToWorldviewCh <- a
-	}
-*/
+	select {}
+	/*
+		for a := range worldviewRx {
+			networkToInitCh <- a
+			networkToWorldviewCh <- a
+		}
+	*/
 }
 
 /*
