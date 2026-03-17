@@ -161,6 +161,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
 	if inputStateElevator.Behaviour == fsm.EB_DoorOpen {
 		for dir := 0; dir < Directions; dir++ {
 			if wv.HallOrders[floor][dir].SyncState == Confirmed {
+				fmt.Printf("[Debug][DoorOpen->DeleteProposed] floor=%d dir=%s owner=%q\n", floor, debugHallDirection(dir), wv.HallOrders[floor][dir].OwnerID)
 				wv.HallOrders[floor][dir].SyncState = DeleteProposed
 			}
 		}
@@ -191,7 +192,45 @@ func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string][
 			}
 		}
 	}
+
 	return ho
+}
+
+func debugOrderSyncState(syncState OrderSyncState) string {
+	switch syncState {
+	case None:
+		return "None"
+	case Unconfirmed:
+		return "Unconfirmed"
+	case Confirmed:
+		return "Confirmed"
+	case DeleteProposed:
+		return "DeleteProposed"
+	default:
+		return fmt.Sprintf("Unknown(%d)", syncState)
+	}
+}
+
+func debugHallDirection(dir int) string {
+	switch dir {
+	case 0:
+		return "Up"
+	case 1:
+		return "Down"
+	default:
+		return fmt.Sprintf("Unknown(%d)", dir)
+	}
+}
+
+func debugPrintHallOrders(context string, hallOrders HallOrders) {
+	fmt.Printf("\n[Worldview] Hallorders %s\n", context)
+	for floor := NumFloors - 1; floor >= 0; floor-- {
+		fmt.Printf("  Floor %d:\n", floor)
+		for dir := 0; dir < Directions; dir++ {
+			order := hallOrders[floor][dir]
+			fmt.Printf("    %-4s state=%-14s owner=%q\n", debugHallDirection(dir), debugOrderSyncState(order.SyncState), order.OwnerID)
+		}
+	}
 }
 
 func GoroutineForWorldview(
@@ -254,17 +293,18 @@ func GoroutineForWorldview(
 			worldviewToAssignerCh <- copyWorldviewsMapWithLocking(worldviewsMap)
 
 		case inputPeerWorldview := <-networkToWorldviewCh:
-			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
-			if inputPeerWorldview.IdElevator != myID {
-				myWorldview = worldviewsMap[myID]
-				if myWorldview.AllCabOrders == nil {
-					myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
-				}
-				myWorldview.mu.Lock()
-				myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.MycabOrders
-				myWorldview.mu.Unlock()
-				worldviewsMap[myID] = myWorldview
+			if inputPeerWorldview.IdElevator == myID {
+				continue
 			}
+			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
+			myWorldview = worldviewsMap[myID]
+			if myWorldview.AllCabOrders == nil {
+				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
+			}
+			myWorldview.mu.Lock()
+			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.MycabOrders
+			myWorldview.mu.Unlock()
+			worldviewsMap[myID] = myWorldview
 			worldviewToSyncCh <- copyWorldviewsMapWithLocking(worldviewsMap)
 
 		case inputDeadPeer := <-lostPeerIdCh:
@@ -293,7 +333,9 @@ func GoroutineForWorldview(
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview = worldviewsMap[myID]
+			debugPrintHallOrders("before assignment", myWorldview.HallOrders)
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
+			debugPrintHallOrders("after assignment", myWorldview.HallOrders)
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- copyWorldviewWithLocking(worldviewsMap[myID])
 		}

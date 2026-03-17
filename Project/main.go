@@ -2,7 +2,6 @@ package main
 
 //A-To do: Fikse at lights on sender caborders lys, sender kun hallorders atm. Også sender off signal dårlig.
 
-
 import (
 	fsm "Project/FSM"
 	hardware "Project/Hardware"
@@ -30,7 +29,7 @@ func main() {
 	// Må gjøre worldview private
 
 	//To worldview
-	elevatorToWorldviewCh := make(chan fsm.ElevatorState)
+	elevatorToWorldviewCh := make(chan fsm.ElevatorState, 1) //A-La til buffer, idk why
 	syncToWorldviewCh := make(chan wv.HallOrders, 1)
 	networkToWorldviewCh := make(chan wv.Worldview)
 	assignerToWordviewCh := make(chan map[string][4][3]bool, 1)
@@ -73,6 +72,9 @@ func main() {
 	for {
 		select {
 		case a := <-worldviewRx:
+			if a.IdElevator == id {
+				continue
+			}
 			//fmt.Printf("Received from %q: %#v\n", id, a)
 			networkToWorldviewCh <- a
 		}

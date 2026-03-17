@@ -3,6 +3,7 @@ package fsm
 import (
 	elevio "Project/Driver"
 	t "Project/types"
+	"fmt"
 )
 
 const N_FLOORS = t.N_FLOORS
@@ -35,6 +36,11 @@ func sendState(elevatorState *ElevatorState, elevatorStateCh chan ElevatorState)
 	select {
 	case elevatorStateCh <- *elevatorState:
 	default:
+		select {
+		case <-elevatorStateCh:
+		default:
+		}
+		elevatorStateCh <- *elevatorState
 	}
 }
 
@@ -104,5 +110,6 @@ func updateBehaviourAndRequests(behaviour Behaviour, requests [N_FLOORS][N_BUTTO
 
 	if changed {
 		sendState(elevatorState, elevatorStateCh)
+		fmt.Printf("\n***\n%+v\n***\n", *elevatorState)
 	}
 }

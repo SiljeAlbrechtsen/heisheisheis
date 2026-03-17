@@ -59,13 +59,14 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 	for { // 4 sjekk om det trenges å sjekke door open i should stop, 5 sjekk om det trenges å sjekke door open i should clear immediately, 6 Når den drar fra en etasje så stopper den i samme etasje og trur at den er i samme etg selvom den har forlatt etasjen
 		select {
-		case newRequests := <-assignerToFsmCh: //A-Tar i mot requests fra assigner og legger de i elevater sin state, sender så oppdatering til worldview
-			//if requests_shouldClearImmediately() //
+		case newRequests := <-assignerToFsmCh: //A-Tar i mot requests fra assigner og legger de i elevaterState, sender så oppdatering til worldview
+			fmt.Println(newRequests) //TO DO: FJERN
 			mergedState := updateElevatorRequests(elevatorState, newRequests)
 			updateRequests(mergedState.Requests, &elevatorState, elevatorStateCh)
 
-			if doorTimer != nil && elevatorState.Floor != -1 && requests_shouldServeCurrentFloor(elevatorState) {
+			if doorTimer != nil && elevatorState.Floor != -1 && requests_shouldServeCurrentFloor(elevatorState) {  //A-Skal fungere
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
+				fmt.Println("###\nServing current floor immediately after receiving new requests\n###") //TO DO: FJERN
 				continue
 			}
 
@@ -103,7 +104,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 				elevatorState, doorTimer = clearFloorRequests(elevatorState, elevatorStateCh)
 			}
 
-			if elevatorState.Behaviour != EB_DoorOpen && requests_checkForRequests(elevatorState) {
+			if elevatorState.Behaviour != EB_DoorOpen && requests_checkForRequests(elevatorState) && sensorFloor != -1 { //SJEKK SISTE
 				db := requests_chooseDirection(elevatorState)
 				applyDecision(db, &elevatorState, elevatorStateCh)
 			}
@@ -157,17 +158,10 @@ func openDoorAndClearCurrentFloor(elevatorState ElevatorState, elevatorStateCh c
 }
 
 func serveCurrentFloorNow(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time, bool) {
-	if elevatorState.Floor == -1 {
-		return elevatorState, nil, false
-	}
-	if elevatorState.Behaviour == EB_DoorOpen {
-		return elevatorState, nil, false
-	}
-	if !requests_shouldServeCurrentFloor(elevatorState) {
+	if elevatorState.Floor == -1 || elevatorState.Behaviour == EB_DoorOpen || !requests_shouldServeCurrentFloor(elevatorState) {
 		return elevatorState, nil, false
 	}
 
 	elevatorState, doorTimer := openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 	return elevatorState, doorTimer, true
 }
-

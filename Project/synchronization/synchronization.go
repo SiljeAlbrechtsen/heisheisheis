@@ -2,9 +2,9 @@ package synchronization
 
 import (
 	wv "Project/worldview"
+	"fmt"
 	//"fmt"
 )
-
 
 // ____________________________________________________________________________________________________________
 // ---------------- CHANNELS-----------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ func nextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 func syncHallOrders(
 	latestWorldviews map[string]wv.Worldview,
 	myID string,
-	lightsOnCh  chan<- [2]int,
+	lightsOnCh chan<- [2]int,
 	lightsOffCh chan<- [2]int,
 ) wv.HallOrders {
 	myHallOrders := latestWorldviews[myID].HallOrders
@@ -57,11 +57,11 @@ func syncHallOrders(
 				if myCurrentOrder == peerCurrentOrder {
 					continue
 
-				// Hvis peer er på next order skal jeg også på next order
+					// Hvis peer er på next order skal jeg også på next order
 				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
 					myHallOrders[f][d] = peerCurrentOrder
 
-				// Hvis vi er på confirmed, peer er på unconfirmed, men har dødd skal vi også gå til unconfirmed.
+					// Hvis vi er på confirmed, peer er på unconfirmed, men har dødd skal vi også gå til unconfirmed.
 				} else if myCurrentOrder.SyncState == nextOrderState(peerCurrentOrder.SyncState) && peerCurrentOrder.OwnerID == wv.PeerDied {
 					myHallOrders[f][d] = peerCurrentOrder
 				}
@@ -97,14 +97,18 @@ func syncHallOrders(
 				for _, peer := range latestWorldviews {
 					if peer.ErrorState {
 						continue
-					}					
+					}
 					peerState := peer.HallOrders[f][d].SyncState
+					if peerState != wv.DeleteProposed && peerState != wv.None {
+						fmt.Printf("[Debug][Sync DeleteProposed blocked] floor=%d dir=%d peer=%s peerState=%d\n", f, d, peer.IdElevator, peerState)
+					}
 					if peerState != wv.DeleteProposed && peerState != wv.None {
 						allAgree = false
 						break
 					}
 				}
 				if allAgree {
+					fmt.Printf("[Debug][Sync DeleteProposed->None] floor=%d dir=%d\n", f, d)
 					myHallOrders[f][d] = wv.Order{SyncState: wv.None, OwnerID: wv.NoOwner}
 					lightsOffCh <- [2]int{f, d}
 				}
@@ -115,17 +119,16 @@ func syncHallOrders(
 	return myHallOrders
 }
 
-
 // _______________________________________________________
 // ---------------GO ROUTINE MED CHANNELS-----------------
 // _______________________________________________________
 
 func GoRoutineSync(
-	myID              string,
+	myID string,
 	syncToWorldviewCh chan<- wv.HallOrders,
 	worldviewToSyncCh <-chan map[string]wv.Worldview,
-	lightsOnCh        chan<- [2]int,
-	lightsOffCh       chan<- [2]int,
+	lightsOnCh chan<- [2]int,
+	lightsOffCh chan<- [2]int,
 ) {
 	for {
 		latestWorldviews := <-worldviewToSyncCh
@@ -133,9 +136,3 @@ func GoRoutineSync(
 		syncToWorldviewCh <- syncedHallOrders
 	}
 }
-
-
-
-
-
-
