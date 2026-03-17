@@ -41,7 +41,7 @@ func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorld
 		fmt.Println("Worldview fra: ", wv.IdElevator)
 		fmt.Println("Hallorders: ", wv.HallOrders)
 		fmt.Println("State: ", wv.State)
-		fmt.Println("myCaborders: ", wv.MycabOrders)
+		fmt.Println("allCaborders: ", wv.AllCabOrders)
 
 		networkToWorldviewCh <- wv
 	}

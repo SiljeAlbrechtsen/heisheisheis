@@ -47,7 +47,6 @@ type Worldview struct {
 	IdElevator   string
 	HallOrders   HallOrders
 	State        fsm.ElevatorState
-	MycabOrders  [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
 	AllCabOrders map[string][NumFloors]bool
 	ErrorState   bool
 	//mu           sync.RWMutex // Beskytter AllCabOrders
@@ -66,8 +65,6 @@ func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-ch
 				continue
 			}
 
-			//A-Koprierer alle cab og hallorders med locking
-
 			newAllCabOrders := make(map[string][NumFloors]bool, len(incomingWv.AllCabOrders))
 			for id, orders := range incomingWv.AllCabOrders {
 				newAllCabOrders[id] = orders
@@ -75,11 +72,6 @@ func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-ch
 
 			myWv.AllCabOrders = newAllCabOrders // A-Til hit er endret
 			myWv.HallOrders = incomingWv.HallOrders
-
-			// henter egne cabOrders hvis de finnes i AllCaborders
-			if caborders, exists := myWv.AllCabOrders[myId]; exists {
-				myWv.MycabOrders = caborders
-			}
 
 			return myWv // ferdig init
 		// Hvis de ikke får noe fra andre
@@ -145,7 +137,7 @@ func dirToIndex(d fsm.Direction) int {
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere state og
 //
 //	ordre i worldview.
-func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fsm.ElevatorState) Worldview {
+func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fsm.ElevatorState, myID string) Worldview {
 	wv := worldview
 	wv.State = inputStateElevator
 	floor := inputStateElevator.Floor
@@ -154,8 +146,12 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
 		return wv
 	}
 
-	if wv.MycabOrders[floor] {
-		wv.MycabOrders[floor] = false
+	if wv.AllCabOrders != nil {
+		orders := wv.AllCabOrders[myID]
+		if orders[floor] {
+			orders[floor] = false
+			wv.AllCabOrders[myID] = orders
+		}
 	}
 
 	// Når heisen betjener en etasje (dør åpen), sett alle hall-ordre på etasjen til DeleteProposed
@@ -317,12 +313,11 @@ func GoroutineForWorldview(
 
 		case inputStateElevator := <-elevatorToWorldviewCh:
 			myWorldview = worldviewsMap[myID] // A-La til denne for å sikre at vi har siste versjon av worldview før vi oppdaterer den
-			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator)
+			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator, myID)
 			if myWorldview.AllCabOrders == nil {
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 			}
 
-			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
@@ -344,7 +339,7 @@ func GoroutineForWorldview(
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 			}
 
-			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.MycabOrders
+			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.AllCabOrders[inputPeerWorldview.IdElevator]
 
 			worldviewsMap[myID] = myWorldview
 			DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
@@ -366,7 +361,6 @@ func GoroutineForWorldview(
 			myWorldview = worldviewsMap[myID]
 			myWorldview = addNewCabOrder(myWorldview, inputCabBtn, myID)
 
-			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 
 			worldviewsMap[myID] = myWorldview
 			DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
@@ -416,7 +410,6 @@ func addNewCabOrder(worldview Worldview, inputCabBtn int, myID string) Worldview
 	cabOrders[inputCabBtn] = true
 	wv.AllCabOrders[myID] = cabOrders
 
-	wv.MycabOrders[inputCabBtn] = true
 
 	return wv
 }

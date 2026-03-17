@@ -48,12 +48,12 @@ func directionToString(d fsm.Direction) string {
 }
 
 // Hjelpefunksjon
-func buildState(worldview wv.Worldview) stateInputJSON {
+func buildState(id string, worldview wv.Worldview) stateInputJSON {
 	return stateInputJSON{
 		Behaviour:   behaviourToString(worldview.State.Behaviour),
 		Floor:       worldview.State.Floor,
 		Direction:   directionToString(worldview.State.Dirn),
-		CabRequests: worldview.MycabOrders,
+		CabRequests: worldview.AllCabOrders[id],
 	}
 }
 
@@ -85,7 +85,7 @@ func buildInputHallRequestAssigner(latestWorldviews map[string]wv.Worldview, MyI
 		if worldview.ErrorState {
 			continue
 		}
-		states[id] = buildState(worldview)
+		states[id] = buildState(id, worldview)
 	}
 
 	return hallRequestsInputJSON{
