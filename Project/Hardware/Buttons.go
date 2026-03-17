@@ -3,6 +3,7 @@ package hardware
 import (
 	elevio "Project/Driver"
 	"fmt"
+	"time"
 )
 
 func ButtonsListener(cabButtonCh chan int, hallButtonCh chan [2]int) {
@@ -24,7 +25,7 @@ func ButtonsListener(cabButtonCh chan int, hallButtonCh chan [2]int) {
 	}
 }
 
-func LightsListener(lightOnCh chan [2]int, lightsOffCh chan [2]int) {  //To DO: Fjern printksjon som tar inn en bool for on/off
+func LightsListener(lightOnCh chan [2]int, lightsOffCh chan [2]int) { //To DO: Fjern printksjon som tar inn en bool for on/off
 
 	for {
 		select {
@@ -45,5 +46,17 @@ func TurnOffAllLights() { //A-La til en slå av alle lys ed init
 		}
 	}
 	elevio.SetDoorOpenLamp(false)
+	elevio.SetStopLamp(false)
+}
+
+func ErrorLight(errorLight bool) {
+	if errorLight {
+		for {
+			elevio.SetStopLamp(true)
+			time.Sleep(500 * time.Millisecond)
+			elevio.SetStopLamp(false)
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
 	elevio.SetStopLamp(false)
 }

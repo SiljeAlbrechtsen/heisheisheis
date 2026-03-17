@@ -8,9 +8,9 @@ import (
 	Hardware "Project/Hardware"
 )
 
-
-
 func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
+
+	err := false
 
 	elevatorState := InitElevatorState()
 	InitElevator(&elevatorState, elevatorStateCh)
@@ -19,16 +19,19 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 	defer floorTicker.Stop()
 
 	var doorTimer <-chan time.Time
+	errorTimer := time.NewTimer(10 * time.Second)
+	defer stopAndDrainTimer(errorTimer)
 
 	stopBtnCh := make(chan bool)
 	obstructCh := make(chan bool)
 	go elevio.PollStopButton(stopBtnCh)
 	go elevio.PollObstructionSwitch(obstructCh)
+	go Hardware.ErrorLight(err)
 
 	for { // 4 sjekk om det trenges å sjekke door open i should stop, 5 sjekk om det trenges å sjekke door open i should clear immediately
 		// 6 Forenkle is setningene. kanskje en funksjon som sjekker om det skal bli tru eller ey
 		select {
-		case newRequests := <-assignerToFsmCh: 
+		case newRequests := <-assignerToFsmCh:
 			mergedState := updateElevatorRequests(elevatorState, newRequests)
 			updateRequests(mergedState.Requests, &elevatorState, elevatorStateCh)
 
@@ -55,6 +58,9 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 			if elevio.GetFloor() != -1 {
 				updateFloor(elevio.GetFloor(), &elevatorState, elevatorStateCh)
+				resetTimer(errorTimer, 10*time.Second)
+				updateErrorState(false, &elevatorState, elevatorStateCh)
+				Hardware.ErrorLight(false)
 			}
 
 			if doorTimer == nil && elevio.GetFloor() != -1 && elevatorState.Behaviour == EB_Moving {
@@ -77,12 +83,18 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 				updateErrorState(obst, &elevatorState, elevatorStateCh)
 				doorTimer = time.After(3000 * time.Millisecond)
 			}
+		case <-errorTimer.C:
+			if elevio.GetFloor() == -1 {
+				updateErrorState(true, &elevatorState, elevatorStateCh)
+				Hardware.ErrorLight(true)
+			}
+			resetTimer(errorTimer, 10*time.Second)
 		}
 
 	}
 }
 
-//Init for elevator
+// Init for elevator
 func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
 
 	Hardware.TurnOffAllLights() //A-Fjerner alle gamle lys, i tilfelle heisen starter med noen lys på
@@ -99,7 +111,7 @@ func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
 	sendState(elevator, elevatorStateCh)
 }
 
-//Helper functions for FSM3
+// Helper functions for FSM3
 func updateElevatorRequests(elevatorState ElevatorState, newRequests [4][3]bool) ElevatorState {
 	for f := 0; f < N_FLOORS; f++ {
 		for b := 0; b < N_BUTTONS; b++ {
@@ -154,4 +166,18 @@ func elevatorCanMove(e ElevatorState) bool {
 		return true
 	}
 	return false
+}
+
+func resetTimer(t *time.Timer, d time.Duration) { //Timer bort kanskje
+	stopAndDrainTimer(t)
+	t.Reset(d)
+}
+
+func stopAndDrainTimer(t *time.Timer) {
+	if !t.Stop() {
+		select {
+		case <-t.C:
+		default:
+		}
+	}
 }

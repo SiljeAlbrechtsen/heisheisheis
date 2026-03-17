@@ -341,7 +341,7 @@ func GoroutineForWorldview(
 			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.AllCabOrders[inputPeerWorldview.IdElevator]
 
 			worldviewsMap[myID] = myWorldview
-			DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
+			//DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputDeadPeer := <-lostPeerIdCh:
@@ -362,7 +362,7 @@ func GoroutineForWorldview(
 
 
 			worldviewsMap[myID] = myWorldview
-			DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
+			//DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 

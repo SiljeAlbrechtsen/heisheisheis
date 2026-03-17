@@ -118,6 +118,7 @@ func updateErrorState(errorState bool, elevatorState *ElevatorState, elevatorSta
 	if elevatorState.Error == errorState {
 		return
 	}
+	
 	elevatorState.Error = errorState
 	sendState(elevatorState, elevatorStateCh)
 }
