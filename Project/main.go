@@ -75,13 +75,8 @@ func main() {
 	for {
 		select {
 		case a := <-worldviewRx:
-			//if a.IdElevator == id {
-			//	continue
-			//}
-			//fmt.Printf("Received from %q: %#v\n", id, a)
 			networkToInitCh <- a
 			networkToWorldviewCh <- a
-
 		}
 	}
 
