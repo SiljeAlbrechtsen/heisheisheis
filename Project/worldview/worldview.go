@@ -2,10 +2,9 @@ package worldview
 
 import (
 	fsm "Project/FSM"
-	"time"
 	"fmt"
+	"time"
 )
-
 
 //______________________________________________________________________________________________________
 //----------------  Structs ----------------------------------------------------------------------------
@@ -60,25 +59,25 @@ func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-ch
 		// Hvis den får andre worldvies
 		case incomingWv := <-networkToWorldviewCh:
 			//Ignorerer seg selv
-			  if incomingWv.IdElevator == myId {
-                continue
-            }
-			
+			if incomingWv.IdElevator == myId {
+				continue
+			}
+
 			// Koprierer alle cab og hallorders
 			myWv.AllCabOrders = incomingWv.AllCabOrders
 			myWv.HallOrders = incomingWv.HallOrders
 
-		   // henter egne cabOrders hvis de finnes i AllCaborders
-            if caborders, exists := incomingWv.AllCabOrders[myId]; exists {
-                myWv.MycabOrders = caborders
-            }
-		
+			// henter egne cabOrders hvis de finnes i AllCaborders
+			if caborders, exists := incomingWv.AllCabOrders[myId]; exists {
+				myWv.MycabOrders = caborders
+			}
+
 			return myWv // ferdig init
 		// Hvis de ikke får noe fra andre
-		case <- timeout:
+		case <-timeout:
 			return myWv
 		}
-	
+
 	}
 
 }
@@ -242,13 +241,13 @@ func GoroutineForWorldview(
 			}
 			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- worldviewsMap[myID]
+			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
 			myWorldview = worldviewsMap[myID]
-			worldviewToNetworkCh <- worldviewsMap[myID]
+			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToAssignerCh <- copyMap(worldviewsMap)
 
 		case inputPeerWorldview := <-networkToWorldviewCh:
@@ -269,7 +268,7 @@ func GoroutineForWorldview(
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- worldviewsMap[myID]
+			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputCabBtn := <-cabBtnCh:
@@ -277,15 +276,14 @@ func GoroutineForWorldview(
 
 			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- worldviewsMap[myID]
+			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			fmt.Println("[Worldview] AllCabOrders etter cab-bestilling:", myWorldview.AllCabOrders)
 			worldviewToAssignerCh <- copyMap(worldviewsMap)
-
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- worldviewsMap[myID]
+			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 		}
 
 	}
@@ -348,7 +346,7 @@ func addNewCabOrder(worldview Worldview, inputCabBtn int, myID string) Worldview
 
 	cabOrders := wv.AllCabOrders[myID]
 	cabOrders[inputCabBtn] = true
-	wv.AllCabOrders[myID] = cabOrders 
+	wv.AllCabOrders[myID] = cabOrders
 
 	wv.MycabOrders[inputCabBtn] = true
 
