@@ -2,9 +2,10 @@ package worldview
 
 import (
 	fsm "Project/FSM"
-	"fmt"
 	"time"
+	"fmt"
 )
+
 
 //______________________________________________________________________________________________________
 //----------------  Structs ----------------------------------------------------------------------------
@@ -50,33 +51,6 @@ type Worldview struct {
 	ErrorState   bool
 }
 
-// A-Var feil i aksesering av maps, derfor er det lagt til en funksjon for å klone map
-func cloneAllCabOrders(src map[string][NumFloors]bool) map[string][NumFloors]bool {
-	if src == nil {
-		return nil
-	}
-	dst := make(map[string][NumFloors]bool, len(src))
-	for id, orders := range src {
-		dst[id] = orders
-	}
-	return dst
-}
-
-func cloneWorldview(src Worldview) Worldview {
-	dst := src
-	dst.AllCabOrders = cloneAllCabOrders(src.AllCabOrders)
-	return dst
-}
-
-func cloneWorldviewsMap(src map[string]Worldview) map[string]Worldview {
-	dst := make(map[string]Worldview, len(src))
-	for id, worldview := range src {
-		dst[id] = cloneWorldview(worldview)
-	}
-	return dst
-}
-
-// A-Alt over er lagt til
 func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-chan Worldview) Worldview {
 	myWv := myWorldview
 	timeout := time.After(5 * time.Second)
@@ -86,25 +60,25 @@ func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-ch
 		// Hvis den får andre worldvies
 		case incomingWv := <-networkToWorldviewCh:
 			//Ignorerer seg selv
-			if incomingWv.IdElevator == myId {
-				continue
-			}
-
+			  if incomingWv.IdElevator == myId {
+                continue
+            }
+			
 			// Koprierer alle cab og hallorders
-			myWv.AllCabOrders = cloneAllCabOrders(incomingWv.AllCabOrders) //A-La til Kopiering av map
+			myWv.AllCabOrders = incomingWv.AllCabOrders
 			myWv.HallOrders = incomingWv.HallOrders
 
-			// henter egne cabOrders hvis de finnes i AllCaborders
-			if caborders, exists := incomingWv.AllCabOrders[myId]; exists {
-				myWv.MycabOrders = caborders
-			}
-
+		   // henter egne cabOrders hvis de finnes i AllCaborders
+            if caborders, exists := incomingWv.AllCabOrders[myId]; exists {
+                myWv.MycabOrders = caborders
+            }
+		
 			return myWv // ferdig init
 		// Hvis de ikke får noe fra andre
-		case <-timeout:
+		case <- timeout:
 			return myWv
 		}
-
+	
 	}
 
 }
@@ -240,7 +214,13 @@ func GoroutineForWorldview(
 	myWorldview.ErrorState = false
 	myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 
-	//A-Fjernet copy map
+	copyMap := func(m map[string]Worldview) map[string]Worldview {
+		c := make(map[string]Worldview, len(m))
+		for k, v := range m {
+			c[k] = v
+		}
+		return c
+	}
 
 	for {
 		select {
@@ -262,14 +242,14 @@ func GoroutineForWorldview(
 			}
 			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- cloneWorldview(worldviewsMap[myID]) //A-La til Kopiering av map
-			worldviewToSyncCh <- cloneWorldviewsMap(worldviewsMap)      //A-La til Kopiering av map
+			worldviewToNetworkCh <- worldviewsMap[myID]
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
 			myWorldview = worldviewsMap[myID]
-			worldviewToNetworkCh <- cloneWorldview(worldviewsMap[myID]) //A-La til Kopiering av map
-			worldviewToAssignerCh <- cloneWorldviewsMap(worldviewsMap)  //A-La til Kopiering av map
+			worldviewToNetworkCh <- worldviewsMap[myID]
+			worldviewToAssignerCh <- copyMap(worldviewsMap)
 
 		case inputPeerWorldview := <-networkToWorldviewCh:
 			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
@@ -280,31 +260,32 @@ func GoroutineForWorldview(
 				myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.MycabOrders
 				worldviewsMap[myID] = myWorldview
 			}
-			worldviewToSyncCh <- cloneWorldviewsMap(worldviewsMap) //A-La til Kopiering av map
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputDeadPeer := <-lostPeerIdCh:
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
-			worldviewToSyncCh <- cloneWorldviewsMap(worldviewsMap) //A-La til Kopiering av map
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- cloneWorldview(worldviewsMap[myID]) //A-La til Kopiering av map
-			worldviewToSyncCh <- cloneWorldviewsMap(worldviewsMap)      //A-La til Kopiering av map
+			worldviewToNetworkCh <- worldviewsMap[myID]
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = addNewCabOrder(myWorldview, inputCabBtn, myID)
 
 			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- cloneWorldview(worldviewsMap[myID]) //A-La til Kopiering av map
+			worldviewToNetworkCh <- worldviewsMap[myID]
 			fmt.Println("[Worldview] AllCabOrders etter cab-bestilling:", myWorldview.AllCabOrders)
-			worldviewToAssignerCh <- cloneWorldviewsMap(worldviewsMap) //A-La til Kopiering av map
+			worldviewToAssignerCh <- copyMap(worldviewsMap)
+
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- cloneWorldview(worldviewsMap[myID]) //A-La til Kopiering av map
+			worldviewToNetworkCh <- worldviewsMap[myID]
 		}
 
 	}
@@ -367,7 +348,7 @@ func addNewCabOrder(worldview Worldview, inputCabBtn int, myID string) Worldview
 
 	cabOrders := wv.AllCabOrders[myID]
 	cabOrders[inputCabBtn] = true
-	wv.AllCabOrders[myID] = cabOrders
+	wv.AllCabOrders[myID] = cabOrders 
 
 	wv.MycabOrders[inputCabBtn] = true
 
