@@ -17,13 +17,14 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 	defer floorTicker.Stop()
 
 	var doorTimer <-chan time.Time
-	errorTimer := time.NewTimer(10 * time.Second)
+	errorTimer := time.NewTimer(8 * time.Second) //TODO: Fjern hardkoding
 	defer stopAndDrainTimer(errorTimer)
 
 	stopBtnCh := make(chan bool)
 	obstructCh := make(chan bool)
 	go elevio.PollStopButton(stopBtnCh)
 	go elevio.PollObstructionSwitch(obstructCh)
+	//go Hardware.ErrorLight(err)
 
 	for { // 4 sjekk om det trenges å sjekke door open i should stop, 5 sjekk om det trenges å sjekke door open i should clear immediately
 		// 6 Forenkle is setningene. kanskje en funksjon som sjekker om det skal bli tru eller ey
@@ -77,6 +78,10 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 				updateErrorState(obst, &elevatorState, elevatorStateCh)
 				doorTimer = time.After(3000 * time.Millisecond)
 			}
+		case <-errorTimer.C:
+			fmt.Println("Tiden er ute!")
+			updateErrorState(true, &elevatorState, elevatorStateCh)
+			fmt.Println(elevatorState)
 		}
 
 	}
