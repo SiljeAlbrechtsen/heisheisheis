@@ -7,14 +7,12 @@ import (
 	"time"
 )
 
-
-
 const _pollRate = 20 * time.Millisecond
 
-var _initialized    bool = false
-var _numFloors      int = 4
-var _mtx            sync.Mutex
-var _conn           net.Conn
+var _initialized bool = false
+var _numFloors int = 4
+var _mtx sync.Mutex
+var _conn net.Conn
 
 type MotorDirection int
 
@@ -37,8 +35,6 @@ type ButtonEvent struct {
 	Button ButtonType
 }
 
-
-
 func Init(addr string, numFloors int) {
 	if _initialized {
 		fmt.Println("Driver already initialized!")
@@ -53,8 +49,6 @@ func Init(addr string, numFloors int) {
 	}
 	_initialized = true
 }
-
-
 
 func SetMotorDirection(dir MotorDirection) {
 	write([4]byte{1, byte(dir), 0, 0})
@@ -75,8 +69,6 @@ func SetDoorOpenLamp(value bool) {
 func SetStopLamp(value bool) {
 	write([4]byte{5, toByte(value), 0, 0})
 }
-
-
 
 func PollButtons(receiver chan<- ButtonEvent) {
 	prev := make([][3]bool, _numFloors)
@@ -106,12 +98,15 @@ func PollFloorSensor(receiver chan<- int) {
 	}
 }
 
-func PollStopButton(receiver chan<- bool) {
+func PollStopButton(receiver chan<- bool) { //A-For moroskyld så togler stopknappen-lyset mellom på og av hver gang den trykkes
 	prev := false
+	light := false
 	for {
 		time.Sleep(_pollRate)
 		v := GetStop()
-		if v != prev {
+		if v != prev && v {
+			SetStopLamp(light)
+			light = !light
 			receiver <- v
 		}
 		prev = v
@@ -129,9 +124,6 @@ func PollObstructionSwitch(receiver chan<- bool) {
 		prev = v
 	}
 }
-
-
-
 
 func GetButton(button ButtonType, floor int) bool {
 	a := read([4]byte{6, byte(button), byte(floor), 0})
@@ -157,10 +149,6 @@ func GetObstruction() bool {
 	return toBool(a[1])
 }
 
-
-
-
-
 func read(in [4]byte) [4]byte {
 	_mtx.Lock()
 	defer _mtx.Unlock()
@@ -168,14 +156,18 @@ func read(in [4]byte) [4]byte {
 	if !_initialized || _conn == nil {
 		panic("Elevator driver not initialized")
 	}
-	
+
 	_, err := _conn.Write(in[:])
-	if err != nil { panic("Lost connection to Elevator Server") }
-	
+	if err != nil {
+		panic("Lost connection to Elevator Server")
+	}
+
 	var out [4]byte
 	_, err = _conn.Read(out[:])
-	if err != nil { panic("Lost connection to Elevator Server") }
-	
+	if err != nil {
+		panic("Lost connection to Elevator Server")
+	}
+
 	return out
 }
 
@@ -186,11 +178,12 @@ func write(in [4]byte) {
 	if !_initialized || _conn == nil {
 		panic("Elevator driver not initialized")
 	}
-	
-	_, err := _conn.Write(in[:])
-	if err != nil { panic("Lost connection to Elevator Server") }
-}
 
+	_, err := _conn.Write(in[:])
+	if err != nil {
+		panic("Lost connection to Elevator Server")
+	}
+}
 
 func toByte(a bool) byte {
 	var b byte = 0

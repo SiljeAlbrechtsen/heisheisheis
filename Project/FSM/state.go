@@ -113,3 +113,11 @@ func updateBehaviourAndRequests(behaviour Behaviour, requests [N_FLOORS][N_BUTTO
 		fmt.Printf("\n***\n%+v\n***\n", *elevatorState)
 	}
 }
+
+func updateErrorState(errorState bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+	if elevatorState.Error == errorState {
+		return
+	}
+	elevatorState.Error = errorState
+	sendState(elevatorState, elevatorStateCh)
+}

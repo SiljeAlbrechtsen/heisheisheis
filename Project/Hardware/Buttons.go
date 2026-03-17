@@ -1,8 +1,5 @@
 package hardware
 
-//cabButtonCh
-//hallButtonCh
-
 import (
 	elevio "Project/Driver"
 	"fmt"
@@ -27,7 +24,7 @@ func ButtonsListener(cabButtonCh chan int, hallButtonCh chan [2]int) {
 	}
 }
 
-func LightsListener(lightOnCh chan [2]int, lightsOffCh chan [2]int) {
+func LightsListener(lightOnCh chan [2]int, lightsOffCh chan [2]int) {  //To DO: Fjern printksjon som tar inn en bool for on/off
 
 	for {
 		select {
@@ -47,4 +44,6 @@ func TurnOffAllLights() { //A-La til en slå av alle lys ed init
 			elevio.SetButtonLamp(b, f, false)
 		}
 	}
+	elevio.SetDoorOpenLamp(false)
+	elevio.SetStopLamp(false)
 }
