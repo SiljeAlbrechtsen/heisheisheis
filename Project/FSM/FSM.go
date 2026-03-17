@@ -79,12 +79,6 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 				}
 			}
 
-			if elevatorState.Behaviour != EB_DoorOpen && requests_checkForRequests(elevatorState) {
-				fmt.Println("\n*\n")
-				db := requests_chooseDirection(elevatorState)
-				applyDecision(db, &elevatorState, elevatorStateCh)
-			}
-
 		case <-doorTimer:
 			doorTimer = nil
 			if elevatorState.Error {
@@ -95,8 +89,6 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 				continue
 			}
-			db := requests_chooseDirection(elevatorState)
-			applyDecision(db, &elevatorState, elevatorStateCh)
 
 		case <-floorTicker.C: // alt av heis logikk
 
@@ -108,7 +100,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 				elevatorState, doorTimer = clearFloorRequests(elevatorState, elevatorStateCh)
 			}
 
-			if elevatorState.Behaviour != EB_DoorOpen && requests_checkForRequests(elevatorState) && elevio.GetFloor() != -1 { //SJEKK SISTE
+			if elevatorCanMove(elevatorState) {
 				db := requests_chooseDirection(elevatorState)
 				applyDecision(db, &elevatorState, elevatorStateCh)
 			}
@@ -182,5 +174,8 @@ func serveCurrentFloorNow(elevatorState ElevatorState, elevatorStateCh chan Elev
 }
 
 func elevatorCanMove(e ElevatorState) bool {
-
+	if e.Behaviour != EB_DoorOpen && requests_checkForRequests(e) && elevio.GetFloor() != -1 {
+		return true
+	}
+	return false
 }
