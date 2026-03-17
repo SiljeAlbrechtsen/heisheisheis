@@ -38,13 +38,16 @@ func TransmitWorldviewPeriodically(worldviewTx chan<- wv.Worldview, worldviewToN
 func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorldviewCh chan<- wv.Worldview, networkToInitCh chan<- wv.Worldview) {
 	for {
 		wv := <-worldviewRx
-		fmt.Println("Worldview fra: ", wv.IdElevator)
-		fmt.Println("Hallorders: ", wv.HallOrders)
-		fmt.Println("State: ", wv.State)
-		fmt.Println("allCaborders: ", wv.AllCabOrders)
+		//fmt.Println("Worldview fra: ", wv.IdElevator)
+		//fmt.Println("Hallorders: ", wv.HallOrders)
+		//fmt.Println("State: ", wv.State)
+		//fmt.Println("allCaborders: ", wv.AllCabOrders)
 
-		networkToInitCh <- wv
-		networkToWorldviewCh <- wv
+		select {
+		case networkToInitCh <- wv: // sender til init hvis noen lytter                                                              
+        default:                    // dropper ellers, ikke blokkerende                                                              
+        }                                                                                                                            
+        networkToWorldviewCh <- wv  // alltid send til normal drift    
 	}
 }
 

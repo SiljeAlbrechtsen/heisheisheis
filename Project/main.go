@@ -32,7 +32,7 @@ func main() {
 	elevatorToWorldviewCh := make(chan fsm.ElevatorState, 1) //A-La til buffer, idk why
 	syncToWorldviewCh := make(chan wv.HallOrders, 1)
 	networkToWorldviewCh := make(chan wv.Worldview, 1)
-	networkToInitCh := make(chan wv.Worldview)
+	networkToInitCh := make(chan wv.Worldview, 1)
 	assignerToWordviewCh := make(chan map[string][4][3]bool, 1)
 	cabBtnCh := make(chan int, 8)
 	hallBtnCh := make(chan [2]int, 8)
@@ -68,18 +68,17 @@ func main() {
 
 	go fsm.FSM3(assignerToFsmCh, elevatorToWorldviewCh)
 
-	//go setup.ForwardWorldviewFromNetwork(worldviewRx, networkToWorldviewCh, networkToInitCh)
+	go setup.ForwardWorldviewFromNetwork(worldviewRx, networkToWorldviewCh, networkToInitCh)
 
 	fmt.Println("Started")
 
-	for {
-		select {
-		case a := <-worldviewRx:
-			networkToInitCh <- a
-			networkToWorldviewCh <- a
-		}
+	select{}
+/*
+	for a := range worldviewRx {
+		networkToInitCh <- a
+		networkToWorldviewCh <- a
 	}
-
+*/
 }
 
 /*
