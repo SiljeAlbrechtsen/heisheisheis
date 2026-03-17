@@ -19,12 +19,13 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 	defer floorTicker.Stop()
 
 	var doorTimer <-chan time.Time
+	doorTimer = nil
 	errorTimer := time.NewTimer(5 * time.Second) //TODO: Fjern hardkoding
 	defer stopAndDrainTimer(errorTimer)
 
 	stopBtnCh := make(chan bool)
 	obstructCh := make(chan bool)
-	errorLightCh := make(chan bool)
+	errorLightCh := make(chan bool, 1)
 	go elevio.PollStopButton(stopBtnCh)
 	go elevio.PollObstructionSwitch(obstructCh)
 	go hardware.ErrorLight(errorLightCh)
@@ -59,9 +60,9 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 			if elevio.GetFloor() != -1 {
 				updateFloor(elevio.GetFloor(), &elevatorState, elevatorStateCh)
-				if !obstruct {
-					//fmt.Println("\nReset\n")
-					errorLightCh <- updateErrorState(false, &elevatorState, elevatorStateCh)
+				if !(obstruct && elevatorState.Behaviour == EB_DoorOpen) {
+					//fmt.Println("Reset")
+					sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
 					resetTimer(errorTimer, 5*time.Second)
 				}
 			}
@@ -80,15 +81,15 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 		case obstruct = <-obstructCh: //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
 			if doorTimer != nil && obstruct {
-				errorLightCh <- updateErrorState(obstruct, &elevatorState, elevatorStateCh)
+				sendLatestBool(errorLightCh, updateErrorState(obstruct, &elevatorState, elevatorStateCh))
 			}
 			if doorTimer != nil && !obstruct {
-				errorLightCh <- updateErrorState(obstruct, &elevatorState, elevatorStateCh)
+				sendLatestBool(errorLightCh, updateErrorState(obstruct, &elevatorState, elevatorStateCh))
 				doorTimer = time.After(3000 * time.Millisecond)
 			}
 		case <-errorTimer.C:
 			fmt.Println("Tiden er ute!")
-			errorLightCh <- updateErrorState(true, &elevatorState, elevatorStateCh)
+			sendLatestBool(errorLightCh, updateErrorState(true, &elevatorState, elevatorStateCh))
 			fmt.Println(elevatorState)
 		}
 
@@ -180,5 +181,17 @@ func stopAndDrainTimer(t *time.Timer) {
 		case <-t.C:
 		default:
 		}
+	}
+}
+
+func sendLatestBool(ch chan bool, v bool) {
+	select {
+	case ch <- v:
+	default:
+		select {
+		case <-ch:
+		default:
+		}
+		ch <- v
 	}
 }
