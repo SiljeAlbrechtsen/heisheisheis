@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-var errorLightCh chan bool
-
 func ButtonsListener(cabButtonCh chan int, hallButtonCh chan [2]int) {
 
 	elevioButtonCh := make(chan elevio.ButtonEvent)

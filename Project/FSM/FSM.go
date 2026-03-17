@@ -10,6 +10,8 @@ import (
 
 func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
+	obstruct := false
+
 	elevatorState := InitElevatorState()
 	InitElevator(&elevatorState, elevatorStateCh)
 
@@ -20,15 +22,12 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 	errorTimer := time.NewTimer(5 * time.Second) //TODO: Fjern hardkoding
 	defer stopAndDrainTimer(errorTimer)
 
-	
-
 	stopBtnCh := make(chan bool)
 	obstructCh := make(chan bool)
 	errorLightCh := make(chan bool)
 	go elevio.PollStopButton(stopBtnCh)
 	go elevio.PollObstructionSwitch(obstructCh)
 	go hardware.ErrorLight(errorLightCh)
-	
 
 	for { // 4 sjekk om det trenges å sjekke door open i should stop, 5 sjekk om det trenges å sjekke door open i should clear immediately
 		// 6 Forenkle is setningene. kanskje en funksjon som sjekker om det skal bli tru eller ey
@@ -60,7 +59,11 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 			if elevio.GetFloor() != -1 {
 				updateFloor(elevio.GetFloor(), &elevatorState, elevatorStateCh)
-				resetTimer(errorTimer, 5*time.Second)
+				if !obstruct {
+					fmt.Println("\nReset\n")
+					updateErrorState(false, &elevatorState, elevatorStateCh)
+					resetTimer(errorTimer, 5*time.Second)
+				}
 			}
 
 			if doorTimer == nil && elevio.GetFloor() != -1 && elevatorState.Behaviour == EB_Moving {
@@ -75,17 +78,17 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 		case <-stopBtnCh:
 			fmt.Println(elevatorState)
 
-		case obst := <-obstructCh: //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
-			if doorTimer != nil && obst {
-				errorLightCh <- updateErrorState(obst, &elevatorState, elevatorStateCh)
+		case obstruct = <-obstructCh: //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
+			if doorTimer != nil && obstruct {
+				errorLightCh <- updateErrorState(obstruct, &elevatorState, elevatorStateCh)
 			}
-			if doorTimer != nil && !obst {
-				errorLightCh <- updateErrorState(obst, &elevatorState, elevatorStateCh)
+			if doorTimer != nil && !obstruct {
+				errorLightCh <- updateErrorState(obstruct, &elevatorState, elevatorStateCh)
 				doorTimer = time.After(3000 * time.Millisecond)
 			}
 		case <-errorTimer.C:
 			fmt.Println("Tiden er ute!")
-			errorLightCh <- updateErrorState(true, &elevatorState, elevatorStateCh)
+			CherrorLight <- updateErrorState(true, &elevatorState, elevatorStateCh)
 			fmt.Println(elevatorState)
 		}
 
