@@ -366,9 +366,9 @@ func GoroutineForWorldview(
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview = worldviewsMap[myID]
-			//debugPrintHallOrders("before assignment", myWorldview.HallOrders) // TO DO: FJERN
+			debugPrintHallOrders("before assignment", myWorldview.HallOrders) // TO DO: FJERN
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
-			//debugPrintHallOrders("after assignment", myWorldview.HallOrders)  // TO DO: FJERN
+			debugPrintHallOrders("after assignment", myWorldview.HallOrders) // TO DO: FJERN
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 		}
