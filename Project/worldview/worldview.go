@@ -70,7 +70,13 @@ func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-ch
 				newAllCabOrders[id] = orders
 			}
 
-			myWv.AllCabOrders = newAllCabOrders // A-Til hit er endret
+			// Behold egne cab orders fra myWv FØR vi overskriver med peer sin kopi
+			ownOrders, hadOwnOrders := myWv.AllCabOrders[myId]
+
+			myWv.AllCabOrders = newAllCabOrders
+			if hadOwnOrders {
+				myWv.AllCabOrders[myId] = ownOrders
+			}
 			myWv.HallOrders = incomingWv.HallOrders
 
 			return myWv // ferdig init
