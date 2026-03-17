@@ -49,14 +49,26 @@ func TurnOffAllLights() { //A-La til en slå av alle lys ed init
 	elevio.SetStopLamp(false)
 }
 
-func ErrorLight(errorLight bool) {
-	if errorLight {
-		for {
-			elevio.SetStopLamp(true)
-			time.Sleep(500 * time.Millisecond)
-			elevio.SetStopLamp(false)
-			time.Sleep(500 * time.Millisecond)
+func ErrorLight(errorLight chan bool) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	blinking := false
+	lampOn := false
+
+	for {
+		select {
+		case val := <-errorLight:
+			blinking = val
+			if !blinking {
+				elevio.SetStopLamp(false)
+			}
+
+		case <-ticker.C:
+			if blinking {
+				lampOn = !lampOn
+				elevio.SetStopLamp(lampOn)
+			}
 		}
 	}
-	elevio.SetStopLamp(false)
 }

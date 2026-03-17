@@ -24,7 +24,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 	obstructCh := make(chan bool)
 	go elevio.PollStopButton(stopBtnCh)
 	go elevio.PollObstructionSwitch(obstructCh)
-	//go Hardware.ErrorLight(err)
+	go Hardware.ErrorLight(elevatorState.Error)
 
 	for { // 4 sjekk om det trenges å sjekke door open i should stop, 5 sjekk om det trenges å sjekke door open i should clear immediately
 		// 6 Forenkle is setningene. kanskje en funksjon som sjekker om det skal bli tru eller ey
@@ -68,7 +68,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 			}
 
 		case <-stopBtnCh:
-			fmt.Println(elevatorState.Requests)
+			fmt.Println(elevatorState)
 
 		case obst := <-obstructCh: //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
 			if doorTimer != nil && obst {

@@ -1,8 +1,10 @@
 package fsm
 
+
 import (
 	elevio "Project/Driver"
 	t "Project/types"
+	hardware "Project/Hardware"
 	"fmt"
 )
 
@@ -114,7 +116,7 @@ func updateBehaviourAndRequests(behaviour Behaviour, requests [N_FLOORS][N_BUTTO
 	}
 }
 
-func updateErrorState(errorState bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
+func updateErrorState(errorState bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {	
 	if elevatorState.Error == errorState {
 		return
 	}
