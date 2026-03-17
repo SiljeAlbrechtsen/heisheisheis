@@ -35,7 +35,7 @@ func TransmitWorldviewPeriodically(worldviewTx chan<- wv.Worldview, worldviewToN
 }
 
 // Tar inn worldviewen vi mottar på Rx og setter den på kanalen som sender til worldview
-func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorldviewCh chan<- wv.Worldview) {
+func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorldviewCh chan<- wv.Worldview, networkToInitCh chan<- wv.Worldview) {
 	for {
 		wv := <-worldviewRx
 		fmt.Println("Worldview fra: ", wv.IdElevator)
@@ -44,6 +44,7 @@ func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorld
 		fmt.Println("allCaborders: ", wv.AllCabOrders)
 
 		networkToWorldviewCh <- wv
+		networkToInitCh <- wv
 	}
 }
 

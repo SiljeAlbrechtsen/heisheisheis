@@ -52,14 +52,14 @@ type Worldview struct {
 	//mu           sync.RWMutex // Beskytter AllCabOrders
 }
 
-func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-chan Worldview) Worldview {
+func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Worldview) Worldview {
 	myWv := myWorldview
 	timeout := time.After(1 * time.Second)
 
 	for {
 		select {
 		// Hvis den får andre worldvies
-		case incomingWv := <-networkToWorldviewCh:
+		case incomingWv := <-networkToInitCh:
 			//Ignorerer seg selv
 			if incomingWv.IdElevator == myId {
 				continue
@@ -86,6 +86,7 @@ func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-ch
 		}
 
 	}
+
 
 }
 
@@ -264,6 +265,7 @@ func GoroutineForWorldview(
 	elevatorToWorldviewCh <-chan fsm.ElevatorState,
 	syncToWorldviewCh <-chan HallOrders,
 	networkToWorldviewCh <-chan Worldview,
+	networkToInitCh <-chan Worldview,
 
 	lostPeerIdCh <-chan string,
 	newPeerIdCh <-chan string,
@@ -276,15 +278,13 @@ func GoroutineForWorldview(
 	worldviewToSyncCh chan<- map[string]Worldview,
 	worldviewToNetworkCh chan<- Worldview,
 ) {
-	// NB!!!
-	// Pass på at channelsene bare sender inn når det skjer en endring, slik at de ikke blokkerer
-	// TODO må også skaffe logikk med når peer er død at den ikke tas med i beregninger i sync og assigner. Egen activ state i worldview
+	
 	worldviewsMap := make(map[string]Worldview)
 	myWorldview := worldviewsMap[myID]
 	myWorldview.IdElevator = myID
-	worldviewsMap[myID] = myWorldview
 	myWorldview.ErrorState = false
 	myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
+	worldviewsMap[myID] = myWorldview
 
 	copyMap := func(m map[string]Worldview) map[string]Worldview {
 		c := make(map[string]Worldview, len(m))
@@ -303,18 +303,18 @@ func GoroutineForWorldview(
 
 	for {
 		select {
-		case init := <-newPeerIdCh:
-			if init == myID {
-				myWorldview = worldviewInit(myID, myWorldview, networkToWorldviewCh)
+		case newID := <-newPeerIdCh:
+			if newID == myID {
+				myWorldview = worldviewInit(myID, myWorldview, networkToInitCh)
 				worldviewsMap[myID] = myWorldview
 				DebugPrintAllCabOrders("etter worldviewInit", myWorldview.AllCabOrders)
 				worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 				worldviewToSyncCh <- copyMap(worldviewsMap)
 
 			} else {
-				if existing, ok := worldviewsMap[init]; ok {
+				if existing, ok := worldviewsMap[newID]; ok {
 					existing.ErrorState = false
-					worldviewsMap[init] = existing
+					worldviewsMap[newID] = existing
 				}
 			}
 

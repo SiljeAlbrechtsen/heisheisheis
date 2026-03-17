@@ -32,6 +32,7 @@ func main() {
 	elevatorToWorldviewCh := make(chan fsm.ElevatorState, 1) //A-La til buffer, idk why
 	syncToWorldviewCh := make(chan wv.HallOrders, 1)
 	networkToWorldviewCh := make(chan wv.Worldview)
+	networkToInitCh := make(chan wv.Worldview)
 	assignerToWordviewCh := make(chan map[string][4][3]bool, 1)
 	cabBtnCh := make(chan int, 8)
 	hallBtnCh := make(chan [2]int, 8)
@@ -61,7 +62,7 @@ func main() {
 
 	go hardware.LightsListener(lightOnCh, lightsOffCh)
 
-	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, newPeerIdCh, lostPeerIdCh, cabBtnCh, hallBtnCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
+	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, networkToInitCh, newPeerIdCh, lostPeerIdCh, cabBtnCh, hallBtnCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
 
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
 
