@@ -49,6 +49,9 @@ func syncHallOrders(
 
 	// Steg 1: Følg peers som er ett steg foran
 	for _, peer := range latestWorldviews {
+		if peer.ErrorState {
+			continue
+		}
 		for f := 0; f < wv.NumFloors; f++ {
 			for d := 0; d < wv.Directions; d++ {
 				myCurrentOrder := myHallOrders[f][d]
@@ -62,9 +65,10 @@ func syncHallOrders(
 					myHallOrders[f][d] = peerCurrentOrder
 
 					// Hvis vi er på confirmed, peer er på unconfirmed, men har dødd skal vi også gå til unconfirmed.
-				} else if myCurrentOrder.SyncState == nextOrderState(peerCurrentOrder.SyncState) && peerCurrentOrder.OwnerID == wv.PeerDied {
-					myHallOrders[f][d] = peerCurrentOrder
 				}
+				/*else if myCurrentOrder.SyncState == nextOrderState(peerCurrentOrder.SyncState) && peerCurrentOrder.OwnerID == wv.PeerDied {
+					myHallOrders[f][d] = peerCurrentOrder
+				}*/
 			}
 		}
 	}
@@ -103,7 +107,7 @@ func syncHallOrders(
 						continue
 					}
 					peerState := peer.HallOrders[f][d].SyncState
-				
+
 					if peerState != wv.DeleteProposed && peerState != wv.None {
 						allAgree = false
 						fmt.Printf("[Debug][Sync DeleteProposed blocked] floor=%d dir=%d peer=%s peerState=%d\n", f, d, peer.IdElevator, peerState)
