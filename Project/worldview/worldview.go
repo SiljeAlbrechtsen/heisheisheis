@@ -54,7 +54,7 @@ type Worldview struct {
 
 func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-chan Worldview) Worldview {
 	myWv := myWorldview
-	timeout := time.After(5 * time.Second)
+	timeout := time.After(1 * time.Second)
 
 	for {
 		select {
@@ -107,6 +107,7 @@ func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, input
 	worldviewsMap := latestWorldviews
 	peerID := inputPeerWorldview.IdElevator
 	worldviewsMap[peerID] = inputPeerWorldview
+	
 	return worldviewsMap
 }
 
@@ -343,6 +344,10 @@ func GoroutineForWorldview(
 			myWorldview = worldviewsMap[myID]
 			if myWorldview.AllCabOrders == nil {
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
+			}
+			// KOPIER ALLE CAB ORDERS FRA PEER, IKKE BARE PEER SIN DEL
+			for elevatorID, orders := range inputPeerWorldview.AllCabOrders {
+				myWorldview.AllCabOrders[elevatorID] = orders
 			}
 
 			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.AllCabOrders[inputPeerWorldview.IdElevator]
