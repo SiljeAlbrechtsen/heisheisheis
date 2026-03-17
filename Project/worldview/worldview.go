@@ -66,12 +66,12 @@ func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-ch
 			}
 
 			//A-Koprierer alle cab og hallorders med locking
-			incomingWv.mu.RLock()
+
 			newAllCabOrders := make(map[string][NumFloors]bool, len(incomingWv.AllCabOrders))
 			for id, orders := range incomingWv.AllCabOrders {
 				newAllCabOrders[id] = orders
 			}
-			incomingWv.mu.RUnlock()
+
 			myWv.AllCabOrders = newAllCabOrders // A-Til hit er endret
 			myWv.HallOrders = incomingWv.HallOrders
 
@@ -260,6 +260,21 @@ func GoroutineForWorldview(
 	myWorldview.ErrorState = false
 	myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 
+	copyMap := func(m map[string]Worldview) map[string]Worldview {
+		c := make(map[string]Worldview, len(m))
+		for k, v := range m {
+			if v.AllCabOrders != nil {
+				newAllCabOrders := make(map[string][NumFloors]bool, len(v.AllCabOrders))
+				for id, orders := range v.AllCabOrders {
+					newAllCabOrders[id] = orders
+				}
+				v.AllCabOrders = newAllCabOrders
+			}
+			c[k] = v
+		}
+		return c
+	}
+
 	for {
 		select {
 		case init := <-newPeerIdCh:
@@ -279,18 +294,18 @@ func GoroutineForWorldview(
 			if myWorldview.AllCabOrders == nil {
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 			}
-			myWorldview.mu.Lock()
+
 			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
-			myWorldview.mu.Unlock()
+
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- copyWorldviewWithLocking(worldviewsMap[myID])
-			worldviewToSyncCh <- copyWorldviewsMapWithLocking(worldviewsMap)
+			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
 			myWorldview = worldviewsMap[myID]
-			worldviewToNetworkCh <- copyWorldviewWithLocking(worldviewsMap[myID])
-			worldviewToAssignerCh <- copyWorldviewsMapWithLocking(worldviewsMap)
+			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
+			worldviewToAssignerCh <- copyMap(worldviewsMap)
 
 		case inputPeerWorldview := <-networkToWorldviewCh:
 			if inputPeerWorldview.IdElevator == myID {
@@ -301,35 +316,34 @@ func GoroutineForWorldview(
 			if myWorldview.AllCabOrders == nil {
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 			}
-			myWorldview.mu.Lock()
+
 			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.MycabOrders
-			myWorldview.mu.Unlock()
+
 			worldviewsMap[myID] = myWorldview
-			worldviewToSyncCh <- copyWorldviewsMapWithLocking(worldviewsMap)
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputDeadPeer := <-lostPeerIdCh:
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
 			myWorldview = worldviewsMap[myID]
-			worldviewToSyncCh <- copyWorldviewsMapWithLocking(worldviewsMap)
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = worldviewsMap[myID]
 			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- copyWorldviewWithLocking(worldviewsMap[myID])
-			worldviewToSyncCh <- copyWorldviewsMapWithLocking(worldviewsMap)
+			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = worldviewsMap[myID]
 			myWorldview = addNewCabOrder(myWorldview, inputCabBtn, myID)
 
-			myWorldview.mu.Lock()
 			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
-			myWorldview.mu.Unlock()
+
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- copyWorldviewWithLocking(worldviewsMap[myID])
+			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			fmt.Println("[Worldview] AllCabOrders etter cab-bestilling:", myWorldview.AllCabOrders)
-			worldviewToSyncCh <- copyWorldviewsMapWithLocking(worldviewsMap)
+			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview = worldviewsMap[myID]
@@ -337,7 +351,7 @@ func GoroutineForWorldview(
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
 			debugPrintHallOrders("after assignment", myWorldview.HallOrders)
 			worldviewsMap[myID] = myWorldview
-			worldviewToNetworkCh <- copyWorldviewWithLocking(worldviewsMap[myID])
+			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 		}
 
 	}
@@ -348,34 +362,6 @@ func GoroutineForWorldview(
 //___________________________________________________________________________
 //------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
 //___________________________________________________________________________
-
-/*
-type HallOrdersPublic [NumFloors][Directions]Order
-
-type TransferWorldview struct {
-	IdElevator  string
-	HallOrders  HallOrders
-	State       fsm.ElevatorState
-	MycabOrders [NumFloors]bool
-}
-
-func copyWorldview(worldview Worldview) TransferWorldview {
-	return TransferWorldview{
-		IdElevator:  worldview.IdElevator,
-		HallOrders:  worldview.HallOrders,
-		State:       worldview.State,
-		MycabOrders: worldview.MycabOrders,
-	}
-}
-
-func copyWorldviews(latestWorldviews map[string]Worldview) map[string]TransferWorldview {
-	copied := make(map[string]TransferWorldview, len(latestWorldviews))
-	for id, worldview := range latestWorldviews {
-		copied[id] = copyWorldview(worldview)
-	}
-	return copied
-}
-*/
 
 // Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
 func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
@@ -424,6 +410,7 @@ func addNewHallOrder(worldview Worldview, inputHallBtn [2]int) Worldview {
 }
 
 // Kopierer Worldview-strukturen med sikker locking av AllCabOrders
+/*
 func copyWorldviewWithLocking(src Worldview) Worldview {
 	dst := src
 	src.mu.RLock()
@@ -447,3 +434,4 @@ func copyWorldviewsMapWithLocking(src map[string]Worldview) map[string]Worldview
 	}
 	return dst
 }
+*/
