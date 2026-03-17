@@ -300,16 +300,6 @@ func GoroutineForWorldview(
 
 	for {
 		select {
-		case newID := <-newPeerIdCh:
-			fmt.Printf("slayyy /n")
-			if newID == myID {
-				fmt.Printf("inni iffff newID /n")
-				worldviewsMap[myID] = myWorldview
-				DebugPrintAllCabOrders("etter worldviewInit", myWorldview.AllCabOrders)
-				worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
-				worldviewToSyncCh <- copyMap(worldviewsMap)
-			} 
-
 		case inputStateElevator := <-elevatorToWorldviewCh:
 			myWorldview = worldviewsMap[myID] // A-La til denne for å sikre at vi har siste versjon av worldview før vi oppdaterer den
 			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator, myID)
