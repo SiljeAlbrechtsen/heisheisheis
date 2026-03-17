@@ -56,7 +56,7 @@ func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Wo
 	myWv := myWorldview
 	timeout := time.After(1 * time.Second)
 
-	for {
+		for {
 		select {
 		// Hvis den får andre worldvies
 		case incomingWv := <-networkToInitCh:
@@ -65,27 +65,20 @@ func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Wo
 				continue
 			}
 
-			newAllCabOrders := make(map[string][NumFloors]bool, len(incomingWv.AllCabOrders))
-			for id, orders := range incomingWv.AllCabOrders {
-				newAllCabOrders[id] = orders
-			}
-
-			// Behold egne cab orders fra myWv FØR vi overskriver med peer sin kopi
-			ownOrders, hadOwnOrders := myWv.AllCabOrders[myId]
-
-			myWv.AllCabOrders = newAllCabOrders
-			if hadOwnOrders {
-				myWv.AllCabOrders[myId] = ownOrders
-			}
+			// Koprierer alle cab og hallorders
+			myWv.AllCabOrders = incomingWv.AllCabOrders
 			myWv.HallOrders = incomingWv.HallOrders
 
 			return myWv // ferdig init
+			
 		// Hvis de ikke får noe fra andre
 		case <-timeout:
 			return myWv
 		}
 
 	}
+
+	
 
 
 }
@@ -310,13 +303,7 @@ func GoroutineForWorldview(
 				DebugPrintAllCabOrders("etter worldviewInit", myWorldview.AllCabOrders)
 				worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 				worldviewToSyncCh <- copyMap(worldviewsMap)
-
-			} else {
-				if existing, ok := worldviewsMap[newID]; ok {
-					existing.ErrorState = false
-					worldviewsMap[newID] = existing
-				}
-			}
+			} 
 
 		case inputStateElevator := <-elevatorToWorldviewCh:
 			myWorldview = worldviewsMap[myID] // A-La til denne for å sikre at vi har siste versjon av worldview før vi oppdaterer den
