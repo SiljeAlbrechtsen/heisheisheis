@@ -53,6 +53,9 @@ func requests_here(e ElevatorState) bool {
 
 // requests_chooseDirection (exact C logic)
 func requests_chooseDirection(e ElevatorState) DirnBehaviourPair {
+	if e.Error {
+		return DirnBehaviourPair{D_Stop, EB_DoorOpen}
+	}
 	switch e.Dirn {
 	case D_Up:
 		if requests_above(e) {

@@ -145,7 +145,7 @@ func RunHallRequestAssigner(
 		}
 		// reflect.DeepEqual er med i standard bib. i go og brukes for å sammenligne maps.
 		if !reflect.DeepEqual(result, lastResult) {
-			fmt.Println("Assigner: sender til FSM:", result[myID])
+			//fmt.Println("Assigner: sender til FSM:", result[myID])
 			assignerToFsmCh <- result[myID]
 			assignerToWordviewCh <- result
 			lastResult = result

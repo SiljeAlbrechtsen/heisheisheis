@@ -61,11 +61,11 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 		// 6 Forenkle is setningene. kanskje en funksjon som sjekker om det skal bli tru eller ey
 		select {
 		case newRequests := <-assignerToFsmCh: //A-Tar i mot requests fra assigner og legger de i elevaterState, sender så oppdatering til worldview
-			fmt.Println(newRequests) //TO DO: FJERN
+			//fmt.Println(newRequests) //TO DO: FJERN
 			mergedState := updateElevatorRequests(elevatorState, newRequests)
 			updateRequests(mergedState.Requests, &elevatorState, elevatorStateCh)
 
-			if doorTimer != nil && elevio.GetFloor() != -1 && requests_shouldServeCurrentFloor(elevatorState) { //A-Skal fungere
+			if doorTimer != nil && elevio.GetFloor() != -1 && requests_shouldServeCurrentFloor(elevatorState) { //A-Her skal sjekke om låv å betjene
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 				fmt.Println("###\nServing current floor immediately after receiving new requests\n###") //TO DO: FJERN
 				continue
@@ -85,10 +85,11 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 			}
 
 		case <-doorTimer:
+			doorTimer = nil
 			if elevatorState.Error {
+				fmt.Println("Y")
 				doorTimer = time.After(3000 * time.Millisecond)
 			}
-			doorTimer = nil
 			if requests_shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 				continue
@@ -113,7 +114,8 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 		case <-stopBtnCh:
 			fmt.Println(elevatorState.Requests)
-		case obst := <-obstructCh:
+
+		case obst := <-obstructCh:   //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
 			fmt.Println("Obstruction detected!       %f", obst)
 			if doorTimer != nil && obst {
 				updateErrorState(obst, &elevatorState, elevatorStateCh)
@@ -154,8 +156,7 @@ func applyDecision(db DirnBehaviourPair, elevatorState *ElevatorState, elevatorS
 }
 
 func clearFloorRequests(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time) {
-	fmt.Println(requests_shouldServeCurrentFloor(elevatorState), elevio.GetFloor())
-	if requests_shouldServeCurrentFloor(elevatorState) && elevio.GetFloor() != -1 { //A-La til elevio.GetFloor() != -1 for å unngå å clear'e requests når heisen er mellom etasjer
+	if requests_shouldServeCurrentFloor(elevatorState) && elevio.GetFloor() != -1 && !elevatorState.Error{ //A-La til elevio.GetFloor() != -1 for å unngå å clear'e requests når heisen er mellom etasjer
 		return openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 	}
 
