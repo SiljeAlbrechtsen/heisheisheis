@@ -333,7 +333,7 @@ func GoroutineForWorldview(
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 			}
 
-			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.AllCabOrders[inputPeerWorldview.IdElevator]
+			myWorldview.AllCabOrders = inputPeerWorldview.AllCabOrders
 
 			worldviewsMap[myID] = myWorldview
 			DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
