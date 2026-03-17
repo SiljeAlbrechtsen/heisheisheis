@@ -277,6 +277,8 @@ func GoroutineForWorldview(
 	myWorldview.IdElevator = myID
 	myWorldview.ErrorState = false
 	myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
+	myWorldview.AllCabOrders[myID] = [NumFloors]bool{}
+	myWorldview = worldviewInit(myID, myWorldview, networkToInitCh)
 	worldviewsMap[myID] = myWorldview
 
 	copyMap := func(m map[string]Worldview) map[string]Worldview {
@@ -294,11 +296,14 @@ func GoroutineForWorldview(
 		return c
 	}
 
+
+
 	for {
 		select {
 		case newID := <-newPeerIdCh:
+			fmt.Printf("slayyy /n")
 			if newID == myID {
-				myWorldview = worldviewInit(myID, myWorldview, networkToInitCh)
+				fmt.Printf("inni iffff newID /n")
 				worldviewsMap[myID] = myWorldview
 				DebugPrintAllCabOrders("etter worldviewInit", myWorldview.AllCabOrders)
 				worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]

@@ -46,7 +46,7 @@ func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorld
 		select {
 		case networkToInitCh <- wv: // sender til init hvis noen lytter                                                              
         default:                    // dropper ellers, ikke blokkerende                                                              
-        }                                                                                                                            
+        }
         networkToWorldviewCh <- wv  // alltid send til normal drift    
 	}
 }
@@ -72,9 +72,9 @@ func GetNodeID() string {
 
 // Endret: returnerer ikke lenger peerUpdateCh for å unngå to lesere på samme kanal
 func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
-	peerUpdateCh := make(chan peers.PeerUpdate)
-	newPeerIdCh := make(chan string)
-	lostPeerIdCh := make(chan string)
+	peerUpdateCh := make(chan peers.PeerUpdate, 1)
+	newPeerIdCh := make(chan string, 1)
+	lostPeerIdCh := make(chan string, 1)
 
 	peerTxEnable := make(chan bool)
 	go peers.Transmitter(10001, id, peerTxEnable)
@@ -90,10 +90,7 @@ func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
 			fmt.Printf("  Lost:  %q\n", update.Lost)
 
 			if update.New != "" {
-				select {
-				case newPeerIdCh <- update.New: // endret: non-blocking
-				default:
-				}
+				newPeerIdCh <- update.New 
 			}
 
 			for _, lostId := range update.Lost {
