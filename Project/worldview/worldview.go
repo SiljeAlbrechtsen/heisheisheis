@@ -3,6 +3,7 @@ package worldview
 import (
 	fsm "Project/FSM"
 	"fmt"
+
 	//"sync"
 	"time"
 )
@@ -222,6 +223,28 @@ func debugHallDirection(dir int) string {
 	}
 }
 
+func DebugPrintAllCabOrders(context string, allCabOrders map[string][NumFloors]bool) {
+	fmt.Printf("\n[Worldview] AllCabOrders %s\n", context)
+	if len(allCabOrders) == 0 {
+		fmt.Printf("  (tom)\n")
+		return
+	}
+	for id, orders := range allCabOrders {
+		fmt.Printf("  elevator=%q  floors: ", id)
+		anyActive := false
+		for floor, active := range orders {
+			if active {
+				fmt.Printf("%d ", floor)
+				anyActive = true
+			}
+		}
+		if !anyActive {
+			fmt.Printf("(ingen)")
+		}
+		fmt.Println()
+	}
+}
+
 func debugPrintHallOrders(context string, hallOrders HallOrders) {
 	fmt.Printf("\n[Worldview] Hallorders %s\n", context)
 	for floor := NumFloors - 1; floor >= 0; floor-- {
@@ -281,9 +304,10 @@ func GoroutineForWorldview(
 			if init == myID {
 				myWorldview = worldviewInit(myID, myWorldview, networkToWorldviewCh)
 				worldviewsMap[myID] = myWorldview
+				DebugPrintAllCabOrders("etter worldviewInit", myWorldview.AllCabOrders)
 				worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 				worldviewToSyncCh <- copyMap(worldviewsMap)
-				
+
 			} else {
 				if existing, ok := worldviewsMap[init]; ok {
 					existing.ErrorState = false
@@ -323,6 +347,7 @@ func GoroutineForWorldview(
 			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.MycabOrders
 
 			worldviewsMap[myID] = myWorldview
+			DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputDeadPeer := <-lostPeerIdCh:
@@ -344,8 +369,8 @@ func GoroutineForWorldview(
 			myWorldview.AllCabOrders[myID] = myWorldview.MycabOrders
 
 			worldviewsMap[myID] = myWorldview
+			DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
-			fmt.Println("[Worldview] AllCabOrders etter cab-bestilling:", myWorldview.AllCabOrders)
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputAssignment := <-assignerToWorldviewCh:
