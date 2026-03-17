@@ -117,7 +117,7 @@ func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, input
 // Setter state fra confirmet til uncondiremd og ownerID til PeerDied, kjøres når heis dør
 func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	ho := hallOrders
-	fmt.Printf("I markPeerDeadInHallOrders peer \n")
+	fmt.Printf("I markPeerDeadInHallOrders \n")
 	for i, row := range ho {
 		for j := range row {
 			order := ho[i][j]
@@ -339,8 +339,11 @@ func GoroutineForWorldview(
 			//DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
+		case newPeer := <-newPeerIdCh:
+			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeer)
+
 		case inputDeadPeer := <-lostPeerIdCh:
-			fmt.Println("I case dead peer")
+			fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeer)
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
 			myWorldview = worldviewsMap[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
@@ -381,7 +384,7 @@ func GoroutineForWorldview(
 
 // Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
 func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
-	fmt.Printf("I handlelost peer /n")
+	fmt.Printf("[Worldview] HandleLostPeer: lostID=%s myID=%s\n", lostID, myID)
 	if lostID == myID {
 		return latestWorldviews
 	}
