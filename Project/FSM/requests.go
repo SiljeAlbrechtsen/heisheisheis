@@ -1,5 +1,7 @@
 package fsm
 
+import elevio "Project/Driver"
+
 type DirnBehaviourPair struct {
 	Dirn              Direction
 	ElevatorBehaviour Behaviour
@@ -127,6 +129,9 @@ func requests_shouldClearImmediately(e ElevatorState, btnFloor int, btnType Butt
 }
 
 func requests_shouldServeCurrentFloor(e ElevatorState) bool {
+	if elevio.GetFloor() == -1 {
+		return false
+	}
 	switch e.Dirn {
 	case D_Up:
 		return e.Requests[e.Floor][B_HallUp] ||
