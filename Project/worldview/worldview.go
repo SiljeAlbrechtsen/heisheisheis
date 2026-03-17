@@ -342,14 +342,14 @@ func GoroutineForWorldview(
 
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
-			fmt.Println("[Worldview] AllCabOrders etter cab-bestilling:", myWorldview.AllCabOrders)
+			//fmt.Println("[Worldview] AllCabOrders etter cab-bestilling:", myWorldview.AllCabOrders) // TO DO: FJERN
 			worldviewToSyncCh <- copyMap(worldviewsMap)
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview = worldviewsMap[myID]
-			debugPrintHallOrders("before assignment", myWorldview.HallOrders)
+			//debugPrintHallOrders("before assignment", myWorldview.HallOrders)	// TO DO: FJERN
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
-			debugPrintHallOrders("after assignment", myWorldview.HallOrders)
+			//debugPrintHallOrders("after assignment", myWorldview.HallOrders)  // TO DO: FJERN
 			worldviewsMap[myID] = myWorldview
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 		}

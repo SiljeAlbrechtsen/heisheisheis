@@ -1,7 +1,5 @@
 package fsm
 
-//New version
-
 import (
 	"fmt"
 	"time"
@@ -64,7 +62,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 			mergedState := updateElevatorRequests(elevatorState, newRequests)
 			updateRequests(mergedState.Requests, &elevatorState, elevatorStateCh)
 
-			if doorTimer != nil && elevatorState.Floor != -1 && requests_shouldServeCurrentFloor(elevatorState) {  //A-Skal fungere
+			if doorTimer != nil && elevio.GetFloor() != -1 && requests_shouldServeCurrentFloor(elevatorState) { //A-Skal fungere
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 				fmt.Println("###\nServing current floor immediately after receiving new requests\n###") //TO DO: FJERN
 				continue
@@ -73,7 +71,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 			if doorTimer == nil {
 				var served bool
 				elevatorState, doorTimer, served = serveCurrentFloorNow(elevatorState, elevatorStateCh)
-				if served {
+				if served { //A-om true på served så går vi ut av newrequest for løkken
 					continue
 				}
 			}
@@ -94,17 +92,15 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 		case <-floorTicker.C: // alt av heis logikk
 
-			sensorFloor := elevio.GetFloor()
-
-			if sensorFloor != -1 {
-				updateFloor(sensorFloor, &elevatorState, elevatorStateCh)
+			if elevio.GetFloor() != -1 {
+				updateFloor(elevio.GetFloor(), &elevatorState, elevatorStateCh)
 			}
 
-			if doorTimer == nil && elevatorState.Floor != -1 && elevatorState.Behaviour == EB_Moving {
+			if doorTimer == nil && elevio.GetFloor() != -1 && elevatorState.Behaviour == EB_Moving {
 				elevatorState, doorTimer = clearFloorRequests(elevatorState, elevatorStateCh)
 			}
 
-			if elevatorState.Behaviour != EB_DoorOpen && requests_checkForRequests(elevatorState) && sensorFloor != -1 { //SJEKK SISTE
+			if elevatorState.Behaviour != EB_DoorOpen && requests_checkForRequests(elevatorState) && elevio.GetFloor() != -1 { //SJEKK SISTE
 				db := requests_chooseDirection(elevatorState)
 				applyDecision(db, &elevatorState, elevatorStateCh)
 			}
@@ -141,7 +137,8 @@ func applyDecision(db DirnBehaviourPair, elevatorState *ElevatorState, elevatorS
 }
 
 func clearFloorRequests(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time) {
-	if requests_shouldServeCurrentFloor(elevatorState) {
+	fmt.Println(requests_shouldServeCurrentFloor(elevatorState), elevio.GetFloor())
+	if requests_shouldServeCurrentFloor(elevatorState) && elevio.GetFloor() != -1 { //A-La til elevio.GetFloor() != -1 for å unngå å clear'e requests når heisen er mellom etasjer
 		return openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 	}
 
@@ -150,7 +147,6 @@ func clearFloorRequests(elevatorState ElevatorState, elevatorStateCh chan Elevat
 
 func openDoorAndClearCurrentFloor(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time) {
 	elevio.SetMotorDirection(elevio.MD_Stop)
-
 	elevatorState = requests_clearAtCurrentFloor(elevatorState)
 	updateBehaviourAndRequests(EB_DoorOpen, elevatorState.Requests, &elevatorState, elevatorStateCh)
 
@@ -158,7 +154,7 @@ func openDoorAndClearCurrentFloor(elevatorState ElevatorState, elevatorStateCh c
 }
 
 func serveCurrentFloorNow(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time, bool) {
-	if elevatorState.Floor == -1 || elevatorState.Behaviour == EB_DoorOpen || !requests_shouldServeCurrentFloor(elevatorState) {
+	if elevio.GetFloor() == -1 || elevatorState.Behaviour == EB_DoorOpen || !requests_shouldServeCurrentFloor(elevatorState) {
 		return elevatorState, nil, false
 	}
 
