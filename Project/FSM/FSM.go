@@ -80,6 +80,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 			}
 
 			if elevatorState.Behaviour != EB_DoorOpen && requests_checkForRequests(elevatorState) {
+				fmt.Println("\n*\n")
 				db := requests_chooseDirection(elevatorState)
 				applyDecision(db, &elevatorState, elevatorStateCh)
 			}
@@ -115,7 +116,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 		case <-stopBtnCh:
 			fmt.Println(elevatorState.Requests)
 
-		case obst := <-obstructCh:   //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
+		case obst := <-obstructCh: //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
 			fmt.Println("Obstruction detected!       %f", obst)
 			if doorTimer != nil && obst {
 				updateErrorState(obst, &elevatorState, elevatorStateCh)
@@ -156,7 +157,7 @@ func applyDecision(db DirnBehaviourPair, elevatorState *ElevatorState, elevatorS
 }
 
 func clearFloorRequests(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time) {
-	if requests_shouldServeCurrentFloor(elevatorState) && elevio.GetFloor() != -1 && !elevatorState.Error{ //A-La til elevio.GetFloor() != -1 for å unngå å clear'e requests når heisen er mellom etasjer
+	if requests_shouldServeCurrentFloor(elevatorState) && elevio.GetFloor() != -1 && !elevatorState.Error { //A-La til elevio.GetFloor() != -1 for å unngå å clear'e requests når heisen er mellom etasjer
 		return openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 	}
 
@@ -178,4 +179,8 @@ func serveCurrentFloorNow(elevatorState ElevatorState, elevatorStateCh chan Elev
 
 	elevatorState, doorTimer := openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 	return elevatorState, doorTimer, true
+}
+
+func elevatorCanMove(e ElevatorState) bool {
+
 }
