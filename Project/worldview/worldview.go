@@ -3,7 +3,7 @@ package worldview
 import (
 	fsm "Project/FSM"
 	"fmt"
-	"sync"
+	//"sync"
 	"time"
 )
 
