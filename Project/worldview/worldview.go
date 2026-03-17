@@ -70,7 +70,7 @@ func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Wo
 			myWv.HallOrders = incomingWv.HallOrders
 
 			return myWv // ferdig init
-			
+
 		// Hvis de ikke får noe fra andre
 		case <-timeout:
 			return myWv
@@ -331,10 +331,6 @@ func GoroutineForWorldview(
 			myWorldview = worldviewsMap[myID]
 			if myWorldview.AllCabOrders == nil {
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
-			}
-			// KOPIER ALLE CAB ORDERS FRA PEER, IKKE BARE PEER SIN DEL
-			for elevatorID, orders := range inputPeerWorldview.AllCabOrders {
-				myWorldview.AllCabOrders[elevatorID] = orders
 			}
 
 			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.AllCabOrders[inputPeerWorldview.IdElevator]
