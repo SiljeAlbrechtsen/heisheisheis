@@ -49,7 +49,7 @@ type Worldview struct {
 	MycabOrders  [NumFloors]bool // En liste med true or false for hver eneste etasje å trykke inn
 	AllCabOrders map[string][NumFloors]bool
 	ErrorState   bool
-	mu           sync.RWMutex // Beskytter AllCabOrders
+	//mu           sync.RWMutex // Beskytter AllCabOrders
 }
 
 func worldviewInit(myId string, myWorldview Worldview, networkToWorldviewCh <-chan Worldview) Worldview {
@@ -281,6 +281,9 @@ func GoroutineForWorldview(
 			if init == myID {
 				myWorldview = worldviewInit(myID, myWorldview, networkToWorldviewCh)
 				worldviewsMap[myID] = myWorldview
+				worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
+				worldviewToSyncCh <- copyMap(worldviewsMap)
+				
 			} else {
 				if existing, ok := worldviewsMap[init]; ok {
 					existing.ErrorState = false
