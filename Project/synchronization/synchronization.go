@@ -3,8 +3,29 @@ package synchronization
 import (
 	wv "Project/worldview"
 	"fmt"
-	//"fmt"
 )
+
+func syncStateName(s wv.OrderSyncState) string {
+	switch s {
+	case wv.None:
+		return "None"
+	case wv.Unconfirmed:
+		return "Unconfirmed"
+	case wv.Confirmed:
+		return "Confirmed"
+	case wv.DeleteProposed:
+		return "DeleteProposed"
+	default:
+		return fmt.Sprintf("Unknown(%d)", s)
+	}
+}
+
+func dirName(d int) string {
+	if d == 0 {
+		return "Up"
+	}
+	return "Down"
+}
 
 // ____________________________________________________________________________________________________________
 // ---------------- CHANNELS-----------------------------------------------------------------------------------
@@ -41,11 +62,22 @@ func nextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 // Trigges når vi får inn nye worldviews. Synkroniserer hall orders og sender på channel når lys skal skrus på/av.
 func syncHallOrders(
 	latestWorldviews map[string]wv.Worldview,
-	myID string, //A-Kan vi kanksje hente denne fra en variabel? istedenfor å sende som input i funksjon?
+	myID string,
 	lightsOnCh chan<- [2]int,
 	lightsOffCh chan<- [2]int,
 ) wv.HallOrders {
 	myHallOrders := latestWorldviews[myID].HallOrders
+
+	// Logg hvem vi synkroniserer med
+	peerList := ""
+	for id, peer := range latestWorldviews {
+		if peer.ErrorState {
+			peerList += id + "(dead) "
+		} else {
+			peerList += id + " "
+		}
+	}
+	fmt.Printf("[Sync] Starter synk for %s | peers: %s\n", myID, peerList)
 
 	// Steg 1: Følg peers som er ett steg foran
 	for _, peer := range latestWorldviews {
@@ -60,15 +92,13 @@ func syncHallOrders(
 				if myCurrentOrder == peerCurrentOrder {
 					continue
 
-					// Hvis peer er på next order skal jeg også på next order
 				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
+					fmt.Printf("[Sync][Steg1] Følger %s: floor=%d dir=%s %s->%s\n",
+						peer.IdElevator, f, dirName(d),
+						syncStateName(myCurrentOrder.SyncState),
+						syncStateName(peerCurrentOrder.SyncState))
 					myHallOrders[f][d] = peerCurrentOrder
-
-					// Hvis vi er på confirmed, peer er på unconfirmed, men har dødd skal vi også gå til unconfirmed.
 				}
-				/*else if myCurrentOrder.SyncState == nextOrderState(peerCurrentOrder.SyncState) && peerCurrentOrder.OwnerID == wv.PeerDied {
-					myHallOrders[f][d] = peerCurrentOrder
-				}*/
 			}
 		}
 	}
@@ -87,13 +117,16 @@ func syncHallOrders(
 						continue
 					}
 					if peer.HallOrders[f][d].SyncState != wv.Unconfirmed {
+						fmt.Printf("[Sync][Steg2] Ikke konsensus Unconfirmed: floor=%d dir=%s peer=%s er %s\n",
+							f, dirName(d), peer.IdElevator,
+							syncStateName(peer.HallOrders[f][d].SyncState))
 						allAgree = false
 						break
 					}
 				}
 				if allAgree {
+					fmt.Printf("[Sync][Steg2] Konsensus! Unconfirmed->Confirmed floor=%d dir=%s\n", f, dirName(d))
 					myHallOrders[f][d].SyncState = wv.Confirmed
-					// Hvis ordnen hadde OwnerID = PeerDied, reset den slik Assigner kan re-assign
 					if myHallOrders[f][d].OwnerID == wv.PeerDied {
 						myHallOrders[f][d].OwnerID = wv.NoOwner
 					}
@@ -110,12 +143,13 @@ func syncHallOrders(
 
 					if peerState != wv.DeleteProposed && peerState != wv.None {
 						allAgree = false
-						fmt.Printf("[Debug][Sync DeleteProposed blocked] floor=%d dir=%d peer=%s peerState=%d\n", f, d, peer.IdElevator, peerState)
+						fmt.Printf("[Sync][Steg2] DeleteProposed blokkert: floor=%d dir=%s peer=%s er %s\n",
+							f, dirName(d), peer.IdElevator, syncStateName(peerState))
 						break
 					}
 				}
 				if allAgree {
-					fmt.Printf("[Debug][Sync DeleteProposed->None] floor=%d dir=%d\n", f, d)
+					fmt.Printf("[Sync][Steg2] Konsensus! DeleteProposed->None floor=%d dir=%s\n", f, dirName(d))
 					myHallOrders[f][d] = wv.Order{SyncState: wv.None, OwnerID: wv.NoOwner}
 					lightsOffCh <- [2]int{f, d}
 				}
@@ -139,7 +173,9 @@ func GoRoutineSync(
 ) {
 	for {
 		latestWorldviews := <-worldviewToSyncCh
+		fmt.Printf("[Sync] Mottok worldview-oppdatering (%d peers)\n", len(latestWorldviews))
 		syncedHallOrders := syncHallOrders(latestWorldviews, myID, lightsOnCh, lightsOffCh)
+		fmt.Printf("[Sync] Sender synkede hallorders tilbake til worldview\n")
 		syncToWorldviewCh <- syncedHallOrders
 	}
 }
