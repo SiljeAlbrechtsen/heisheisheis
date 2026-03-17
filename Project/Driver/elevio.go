@@ -98,12 +98,15 @@ func PollFloorSensor(receiver chan<- int) {
 	}
 }
 
-func PollStopButton(receiver chan<- bool) {
+func PollStopButton(receiver chan<- bool) { //A-For moroskyld så togler stopknappen-lyset mellom på og av hver gang den trykkes
 	prev := false
+	light := false
 	for {
 		time.Sleep(_pollRate)
 		v := GetStop()
 		if v != prev && v {
+			SetStopLamp(light)
+			light = !light
 			receiver <- v
 		}
 		prev = v

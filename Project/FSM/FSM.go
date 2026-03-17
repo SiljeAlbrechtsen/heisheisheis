@@ -53,9 +53,12 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 	var doorTimer <-chan time.Time
 
 	stopBtnCh := make(chan bool)
+	obstructCh := make(chan bool)
 	go elevio.PollStopButton(stopBtnCh)
+	go elevio.PollObstructionSwitch(obstructCh)
 
-	for { // 4 sjekk om det trenges å sjekke door open i should stop, 5 sjekk om det trenges å sjekke door open i should clear immediately, 6 Når den drar fra en etasje så stopper den i samme etasje og trur at den er i samme etg selvom den har forlatt etasjen
+	for { // 4 sjekk om det trenges å sjekke door open i should stop, 5 sjekk om det trenges å sjekke door open i should clear immediately
+		// 6 Forenkle is setningene. kanskje en funksjon som sjekker om det skal bli tru eller ey
 		select {
 		case newRequests := <-assignerToFsmCh: //A-Tar i mot requests fra assigner og legger de i elevaterState, sender så oppdatering til worldview
 			fmt.Println(newRequests) //TO DO: FJERN
@@ -82,6 +85,9 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 			}
 
 		case <-doorTimer:
+			if elevatorState.Error {
+				doorTimer = time.After(3000 * time.Millisecond)
+			}
 			doorTimer = nil
 			if requests_shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
@@ -107,6 +113,17 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 		case <-stopBtnCh:
 			fmt.Println(elevatorState.Requests)
+		case obst := <-obstructCh:
+			fmt.Println("Obstruction detected!       %f", obst)
+			if doorTimer != nil && obst {
+				updateErrorState(obst, &elevatorState, elevatorStateCh)
+				fmt.Println("E_State!       %f", elevatorState.Error)
+			}
+			if doorTimer != nil && !obst {
+				updateErrorState(obst, &elevatorState, elevatorStateCh)
+				fmt.Println("E_State!       %f", elevatorState.Error)
+				doorTimer = time.After(3000 * time.Millisecond)
+			}
 		}
 
 	}
