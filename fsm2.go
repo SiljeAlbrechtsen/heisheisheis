@@ -24,6 +24,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 	obstructCh := make(chan bool)
 	go elevio.PollStopButton(stopBtnCh)
 	go elevio.PollObstructionSwitch(obstructCh)
+	//go Hardware.ErrorLight(err)
 
 	for { // 4 sjekk om det trenges å sjekke door open i should stop, 5 sjekk om det trenges å sjekke door open i should clear immediately
 		// 6 Forenkle is setningene. kanskje en funksjon som sjekker om det skal bli tru eller ey
@@ -55,6 +56,9 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 
 			if elevio.GetFloor() != -1 {
 				updateFloor(elevio.GetFloor(), &elevatorState, elevatorStateCh)
+				resetTimer(errorTimer, 10*time.Second)
+				updateErrorState(false, &elevatorState, elevatorStateCh)
+				//Hardware.ErrorLight(false)
 			}
 
 			if doorTimer == nil && elevio.GetFloor() != -1 && elevatorState.Behaviour == EB_Moving {
@@ -72,11 +76,18 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 		case obst := <-obstructCh: //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
 			if doorTimer != nil && obst {
 				updateErrorState(obst, &elevatorState, elevatorStateCh)
+				fmt.Println("X")
 			}
 			if doorTimer != nil && !obst {
 				updateErrorState(obst, &elevatorState, elevatorStateCh)
 				doorTimer = time.After(3000 * time.Millisecond)
 			}
+		case <-errorTimer.C:
+			if elevio.GetFloor() == -1 {
+				updateErrorState(true, &elevatorState, elevatorStateCh)
+				//Hardware.ErrorLight(true)
+			}
+			resetTimer(errorTimer, 10*time.Second)
 		}
 
 	}
@@ -155,6 +166,7 @@ func elevatorCanMove(e ElevatorState) bool {
 	}
 	return false
 }
+
 func resetTimer(t *time.Timer, d time.Duration) { //Timer bort kanskje
 	stopAndDrainTimer(t)
 	t.Reset(d)
