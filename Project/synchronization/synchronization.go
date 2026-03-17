@@ -117,10 +117,11 @@ func syncHallOrders(
 					if peer.ErrorState {
 						continue
 					}
-					if peer.HallOrders[f][d].SyncState != wv.Unconfirmed {
+					peerState := peer.HallOrders[f][d].SyncState
+					if peerState != wv.Unconfirmed && peerState != wv.Confirmed {
 						fmt.Printf("[Sync][Steg2] Ikke konsensus Unconfirmed: floor=%d dir=%s peer=%s er %s\n",
 							f, dirName(d), peer.IdElevator,
-							syncStateName(peer.HallOrders[f][d].SyncState))
+							syncStateName(peerState))
 						allAgree = false
 						break
 					}
