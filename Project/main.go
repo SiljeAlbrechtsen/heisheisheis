@@ -31,7 +31,7 @@ func main() {
 	//To worldview
 	elevatorToWorldviewCh := make(chan fsm.ElevatorState, 1) //A-La til buffer, idk why
 	syncToWorldviewCh := make(chan wv.HallOrders, 1)
-	networkToWorldviewCh := make(chan wv.Worldview)
+	networkToWorldviewCh := make(chan wv.Worldview, 1)
 	networkToInitCh := make(chan wv.Worldview)
 	assignerToWordviewCh := make(chan map[string][4][3]bool, 1)
 	cabBtnCh := make(chan int, 8)
@@ -68,16 +68,20 @@ func main() {
 
 	go fsm.FSM3(assignerToFsmCh, elevatorToWorldviewCh)
 
+	//go setup.ForwardWorldviewFromNetwork(worldviewRx, networkToWorldviewCh, networkToInitCh)
+
 	fmt.Println("Started")
 
 	for {
 		select {
 		case a := <-worldviewRx:
-			if a.IdElevator == id {
-				continue
-			}
+			//if a.IdElevator == id {
+			//	continue
+			//}
 			//fmt.Printf("Received from %q: %#v\n", id, a)
+			networkToInitCh <- a
 			networkToWorldviewCh <- a
+
 		}
 	}
 
