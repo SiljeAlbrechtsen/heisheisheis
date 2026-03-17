@@ -60,8 +60,8 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 			if elevio.GetFloor() != -1 {
 				updateFloor(elevio.GetFloor(), &elevatorState, elevatorStateCh)
 				if !obstruct {
-					fmt.Println("\nReset\n")
-					updateErrorState(false, &elevatorState, elevatorStateCh)
+					//fmt.Println("\nReset\n")
+					errorLightCh <- updateErrorState(false, &elevatorState, elevatorStateCh)
 					resetTimer(errorTimer, 5*time.Second)
 				}
 			}
@@ -88,7 +88,7 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState) {
 			}
 		case <-errorTimer.C:
 			fmt.Println("Tiden er ute!")
-			CherrorLight <- updateErrorState(true, &elevatorState, elevatorStateCh)
+			errorLightCh <- updateErrorState(true, &elevatorState, elevatorStateCh)
 			fmt.Println(elevatorState)
 		}
 

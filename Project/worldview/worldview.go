@@ -64,7 +64,7 @@ type Worldview struct {
 func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Worldview) Worldview {
 	myWv := myWorldview
 	timeout := time.After(1 * time.Second)
-	fmt.Println("hei")
+	//fmt.Println("hei")
 	for {
 		select {
 		// Hvis den får andre worldvies
@@ -117,7 +117,7 @@ func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, input
 // Setter state fra confirmet til uncondiremd og ownerID til PeerDied, kjøres når heis dør
 func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	ho := hallOrders
-	fmt.Printf("I markPeerDeadInHallOrders \n")
+	//fmt.Printf("I markPeerDeadInHallOrders \n")
 	for i, row := range ho {
 		for j := range row {
 			order := ho[i][j]
@@ -128,10 +128,10 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 
 			}
 			ho[i][j] = order
-			fmt.Printf("Floor %d Dir %d: %+v\n", i, j, order)
+			//fmt.Printf("Floor %d Dir %d: %+v\n", i, j, order)
 		}
 	}
-	fmt.Println(":")
+	//fmt.Println(":")
 	return ho
 }
 
@@ -167,7 +167,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
 	if inputStateElevator.Behaviour == fsm.EB_DoorOpen {
 		for dir := 0; dir < Directions; dir++ {
 			if wv.HallOrders[floor][dir].SyncState == Confirmed {
-				fmt.Printf("[Debug][DoorOpen->DeleteProposed] floor=%d dir=%s owner=%q\n", floor, debugHallDirection(dir), wv.HallOrders[floor][dir].OwnerID)
+				//fmt.Printf("[Debug][DoorOpen->DeleteProposed] floor=%d dir=%s owner=%q\n", floor, debugHallDirection(dir), wv.HallOrders[floor][dir].OwnerID)
 				wv.HallOrders[floor][dir].SyncState = DeleteProposed
 			}
 		}
@@ -229,9 +229,9 @@ func debugHallDirection(dir int) string {
 }
 
 func DebugPrintAllCabOrders(context string, allCabOrders map[string][NumFloors]bool) {
-	fmt.Printf("\n[Worldview] AllCabOrders %s\n", context)
+	//fmt.Printf("\n[Worldview] AllCabOrders %s\n", context)
 	if len(allCabOrders) == 0 {
-		fmt.Printf("  (tom)\n")
+		//fmt.Printf("  (tom)\n")
 		return
 	}
 	for id, orders := range allCabOrders {
@@ -343,7 +343,7 @@ func GoroutineForWorldview(
 			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeer)
 
 		case inputDeadPeer := <-lostPeerIdCh:
-			fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeer)
+			//fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeer)
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
 			myWorldview = worldviewsMap[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
@@ -366,7 +366,7 @@ func GoroutineForWorldview(
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview = worldviewsMap[myID]
-			debugPrintHallOrders("before assignment", myWorldview.HallOrders) // TO DO: FJERN
+			//debugPrintHallOrders("before assignment", myWorldview.HallOrders) // TO DO: FJERN
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
 			//debugPrintHallOrders("after assignment", myWorldview.HallOrders)  // TO DO: FJERN
 			worldviewsMap[myID] = myWorldview
@@ -384,7 +384,7 @@ func GoroutineForWorldview(
 
 // Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
 func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
-	fmt.Printf("[Worldview] HandleLostPeer: lostID=%s myID=%s\n", lostID, myID)
+	//fmt.Printf("[Worldview] HandleLostPeer: lostID=%s myID=%s\n", lostID, myID)
 	if lostID == myID {
 		return latestWorldviews
 	}
