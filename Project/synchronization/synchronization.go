@@ -41,7 +41,7 @@ func nextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 // Trigges når vi får inn nye worldviews. Synkroniserer hall orders og sender på channel når lys skal skrus på/av.
 func syncHallOrders(
 	latestWorldviews map[string]wv.Worldview,
-	myID string,
+	myID string, //A-Kan vi kanksje hente denne fra en variabel? istedenfor å sende som input i funksjon?
 	lightsOnCh chan<- [2]int,
 	lightsOffCh chan<- [2]int,
 ) wv.HallOrders {
@@ -99,11 +99,10 @@ func syncHallOrders(
 						continue
 					}
 					peerState := peer.HallOrders[f][d].SyncState
-					if peerState != wv.DeleteProposed && peerState != wv.None {
-						fmt.Printf("[Debug][Sync DeleteProposed blocked] floor=%d dir=%d peer=%s peerState=%d\n", f, d, peer.IdElevator, peerState)
-					}
+				
 					if peerState != wv.DeleteProposed && peerState != wv.None {
 						allAgree = false
+						fmt.Printf("[Debug][Sync DeleteProposed blocked] floor=%d dir=%d peer=%s peerState=%d\n", f, d, peer.IdElevator, peerState)
 						break
 					}
 				}
