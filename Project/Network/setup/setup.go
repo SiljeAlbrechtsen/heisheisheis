@@ -43,8 +43,8 @@ func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorld
 		fmt.Println("State: ", wv.State)
 		fmt.Println("allCaborders: ", wv.AllCabOrders)
 
-		networkToWorldviewCh <- wv
 		networkToInitCh <- wv
+		networkToWorldviewCh <- wv
 	}
 }
 
@@ -79,7 +79,7 @@ func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
 
 	go func() {
 		for update := range peerUpdateCh {
-			
+
 			// Flyttet hit fra main.go
 			fmt.Printf("Peer update:\n")
 			fmt.Printf("  Peers: %q\n", update.Peers)

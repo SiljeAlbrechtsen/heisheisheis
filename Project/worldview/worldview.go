@@ -55,7 +55,7 @@ type Worldview struct {
 func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Worldview) Worldview {
 	myWv := myWorldview
 	timeout := time.After(1 * time.Second)
-
+	fmt.Println("hei")
 		for {
 		select {
 		// Hvis den får andre worldvies
@@ -333,7 +333,7 @@ func GoroutineForWorldview(
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 			}
 
-			myWorldview.AllCabOrders = inputPeerWorldview.AllCabOrders
+			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.AllCabOrders[inputPeerWorldview.IdElevator]
 
 			worldviewsMap[myID] = myWorldview
 			DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
