@@ -363,7 +363,6 @@ func GoroutineForWorldview(
 			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
-			sendLatestWorldviewToFSM(copyMap(worldviewsMap)[myID]) //TODO
 
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
