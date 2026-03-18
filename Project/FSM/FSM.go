@@ -135,28 +135,28 @@ func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
 
 // Helper functions for FSM3
 
-// mergeRequestsFromWorldviewTransitions only adds requests for hall orders that transitioned from Unconfirmed to Confirmed
+// mergeRequestsFromWorldview syncs FSM's requests with worldview's confirmed orders
+// Always includes all Confirmed hall orders FSM owns, and all cab orders
 func mergeRequestsFromWorldviewTransitions(currentRequests [N_FLOORS][N_BUTTONS]bool, prevWorldview, newWorldview t.Worldview) [N_FLOORS][N_BUTTONS]bool {
 	requests := currentRequests
 
-	// Check hall requests: add only if they transitioned from Unconfirmed -> Confirmed
+	// Hall requests: include ALL Confirmed orders (not just transitions)
+	// This ensures FSM stays in sync even if it loses a request locally
 	for f := 0; f < N_FLOORS; f++ {
 		upOrder := newWorldview.HallOrders[f][B_HallUp]
-		prevUpOrder := prevWorldview.HallOrders[f][B_HallUp]
-		// If order was Unconfirmed and is now Confirmed (newly assigned), add it
-		if prevUpOrder.SyncState == t.Unconfirmed && upOrder.SyncState == t.Confirmed {
+		// If order is Confirmed and FSM owns it, include it
+		if upOrder.SyncState == t.Confirmed && upOrder.OwnerID == newWorldview.IdElevator {
 			requests[f][B_HallUp] = true
 		}
 
 		downOrder := newWorldview.HallOrders[f][B_HallDown]
-		prevDownOrder := prevWorldview.HallOrders[f][B_HallDown]
-		// If order was Unconfirmed and is now Confirmed (newly assigned), add it
-		if prevDownOrder.SyncState == t.Unconfirmed && downOrder.SyncState == t.Confirmed {
+		// If order is Confirmed and FSM owns it, include it
+		if downOrder.SyncState == t.Confirmed && downOrder.OwnerID == newWorldview.IdElevator {
 			requests[f][B_HallDown] = true
 		}
 	}
 
-	// Cab requests: add if they exist in AllCabOrders
+	// Cab requests: always include if they exist in AllCabOrders
 	if newWorldview.AllCabOrders != nil {
 		for f := 0; f < N_FLOORS; f++ {
 			if newWorldview.AllCabOrders[newWorldview.IdElevator][f] {
