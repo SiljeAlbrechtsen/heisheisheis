@@ -467,9 +467,10 @@ func addNewHallOrder(worldview Worldview, inputHallBtn [2]int) Worldview {
 
 	order := wv.HallOrders[floor][dir]
 
-	order.SyncState = Unconfirmed
-	order.OwnerID = NoOwner
-
+	if order.SyncState == None {
+		order.SyncState = Unconfirmed
+		order.OwnerID = NoOwner
+	}
 	wv.HallOrders[floor][dir] = order
 
 	return wv
