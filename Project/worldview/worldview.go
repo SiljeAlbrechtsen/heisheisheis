@@ -85,6 +85,19 @@ func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Wo
 func updateWorldviewFromSync(latestWorldviews map[string]Worldview, inputSyncedHallOrders HallOrders, myID string) map[string]Worldview {
 	worldviewsMap := latestWorldviews
 	worldview := worldviewsMap[myID]
+
+	// Bevar lokalt satt OwnerID når sync ikke endrer SyncState.
+	// Sync bruker potensielt utdatert worldview-data, så OwnerID fra sync
+	// kan være utdatert i forhold til lokal assignment.
+	for f := 0; f < NumFloors; f++ {
+		for d := 0; d < Directions; d++ {
+			if inputSyncedHallOrders[f][d].SyncState == worldview.HallOrders[f][d].SyncState &&
+				worldview.HallOrders[f][d].OwnerID != NoOwner {
+				inputSyncedHallOrders[f][d].OwnerID = worldview.HallOrders[f][d].OwnerID
+			}
+		}
+	}
+
 	worldview.HallOrders = inputSyncedHallOrders
 	worldviewsMap[myID] = worldview
 	return worldviewsMap
@@ -350,6 +363,7 @@ func GoroutineForWorldview(
 			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
 			worldviewToSyncCh <- copyMap(worldviewsMap)
+			sendLatestWorldviewToFSM(copyMap(worldviewsMap)[myID]) //TODO
 
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)

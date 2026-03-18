@@ -42,7 +42,6 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 		select {
 
 		case worldview := <-worldviewToFSMCh:
-			fmt.Print("Nå")
 			// Merge requests: only add if order transitioned from Unconfirmed to Confirmed
 			mergedRequests := mergeRequestsFromWorldviewTransitions(elevatorState.Requests, prevWorldview, worldview)
 			updateRequests(mergedRequests, &elevatorState, elevatorStateCh)
