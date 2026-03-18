@@ -440,8 +440,12 @@ func GoroutineForWorldview(
 			//DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
 			sendLatestToSync(copyMap(worldviewsMap))
 
-		case newPeer := <-newPeerIdCh:
+		case newPeerId := <-newPeerIdCh:
 			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeer)
+			if newPeerId == myID {
+				//TODO sjekke om det finnes andre og kopiere hallcalls
+
+			}
 
 		case inputDeadPeer := <-lostPeerIdCh:
 			//fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeer)

@@ -18,9 +18,9 @@ import (
 	//"time"
 )
 
-// TODO: må vi ha strl på input-variabler?
-// TODO: Sjekke feil der fsm ikke ser sine egne hallorders
-// TODO: Sjekke init til driveren, mye spaghetti der nå
+//TODO Ingrid:
+//TODO gjøre at når peersAlive er tom skal den bare ta i mot cab-calls, blokke hallOrders på en måte??
+//TODO når det kommer en ny peer som har min id skal hallOrders kopieres hvis det finnes flere andre 
 
 func main() {
 	addr := t.ResolveElevatorAddr()
