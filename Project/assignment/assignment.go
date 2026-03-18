@@ -60,16 +60,13 @@ func buildState(id string, worldview wv.Worldview) stateInputJSON {
 // Hjelpefunksjon
 func convertHallOrdersToBool(hallOrders wv.HallOrders) [wv.NumFloors][wv.Directions]bool {
 	var converted [wv.NumFloors][wv.Directions]bool
-	orderNotAssigned := false
 
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
-			if hallOrders[f][d].SyncState == wv.Confirmed && hallOrders[f][d].OwnerID == wv.NoOwner {
-				orderNotAssigned = true
-			}
-			// Reassigner bare orders som ikke har noen owner :)
-			converted[f][d] = orderNotAssigned
-			orderNotAssigned = false
+			order := hallOrders[f][d]
+			// Reassign orders som ikke har en levende eier
+			converted[f][d] = order.SyncState == wv.Confirmed &&
+				(order.OwnerID == wv.NoOwner || order.OwnerID == wv.PeerDied)
 		}
 	}
 	return converted
