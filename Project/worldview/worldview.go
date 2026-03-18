@@ -144,6 +144,7 @@ func dirToIndex(d fsm.Direction) int {
 //	ordre i worldview.
 func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fsm.ElevatorState, myID string) Worldview {
 	wv := worldview
+	prevState := wv.State
 	wv.State = inputStateElevator
 	floor := inputStateElevator.Floor
 
@@ -159,15 +160,25 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fs
 		}
 	}
 
-	// Når heisen betjener en etasje (dør åpen), sett alle hall-ordre på etasjen til DeleteProposed
-	if inputStateElevator.Behaviour == fsm.EB_DoorOpen {
-		for dir := 0; dir < Directions; dir++ {
-			if wv.HallOrders[floor][dir].SyncState == Confirmed {
-				//fmt.Printf("[Debug][DoorOpen->DeleteProposed] floor=%d dir=%s owner=%q\n", floor, debugHallDirection(dir), wv.HallOrders[floor][dir].OwnerID)
-				wv.HallOrders[floor][dir].SyncState = DeleteProposed
-			}
-		}
+	if inputStateElevator.Behaviour != fsm.EB_DoorOpen {
 		return wv
+	}
+
+	// Propose delete only for hall requests this elevator has actually cleared on this floor.
+	upOrder := wv.HallOrders[floor][fsm.B_HallUp]
+	upWasCleared := (prevState.Requests[floor][fsm.B_HallUp] && !inputStateElevator.Requests[floor][fsm.B_HallUp]) ||
+		(upOrder.OwnerID == myID && !inputStateElevator.Requests[floor][fsm.B_HallUp])
+	if upOrder.SyncState == Confirmed && upWasCleared {
+		upOrder.SyncState = DeleteProposed
+		wv.HallOrders[floor][fsm.B_HallUp] = upOrder
+	}
+
+	downOrder := wv.HallOrders[floor][fsm.B_HallDown]
+	downWasCleared := (prevState.Requests[floor][fsm.B_HallDown] && !inputStateElevator.Requests[floor][fsm.B_HallDown]) ||
+		(downOrder.OwnerID == myID && !inputStateElevator.Requests[floor][fsm.B_HallDown])
+	if downOrder.SyncState == Confirmed && downWasCleared {
+		downOrder.SyncState = DeleteProposed
+		wv.HallOrders[floor][fsm.B_HallDown] = downOrder
 	}
 
 	return wv

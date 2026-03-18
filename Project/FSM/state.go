@@ -94,7 +94,7 @@ func updateRequests(requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorS
 func updateBehaviourAndRequests(behaviour Behaviour, requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
 	changed := false
 
-	if behaviour == EB_DoorOpen {
+	if behaviour == EB_DoorOpen {  //TODO Sjekk om man må ha behaviour, eller sette open door explecit
 		elevio.SetDoorOpenLamp(true)
 	} else {
 		elevio.SetDoorOpenLamp(false)
