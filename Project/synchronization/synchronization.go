@@ -59,12 +59,24 @@ func nextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 	}
 }
 
+func SecondToNextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
+	switch currentSyncState {
+
+	case wv.None:
+		return wv.Confirmed
+
+	case wv.Unconfirmed:
+		return wv.DeleteProposed
+
+	default:
+		return wv.None
+	}
+}
+
 // Trigges når vi får inn nye worldviews. Synkroniserer hall orders og sender på channel når lys skal skrus på/av.
 func syncHallOrders(
 	latestWorldviews map[string]wv.Worldview,
 	myID string,
-	lightsOnCh chan<- [2]int,
-	lightsOffCh chan<- [2]int,
 ) wv.HallOrders {
 	myHallOrders := latestWorldviews[myID].HallOrders
 
@@ -100,6 +112,10 @@ func syncHallOrders(
 					//	syncStateName(peerCurrentOrder.SyncState))
 					myHallOrders[f][d] = peerCurrentOrder
 				}
+				if SecondToNextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState &&
+					myCurrentOrder.SyncState != wv.Unconfirmed && myCurrentOrder.SyncState != wv.DeleteProposed {
+					myHallOrders[f][d] = peerCurrentOrder
+				}
 			}
 		}
 	}
@@ -132,7 +148,6 @@ func syncHallOrders(
 					if myHallOrders[f][d].OwnerID == wv.PeerDied {
 						myHallOrders[f][d].OwnerID = wv.NoOwner
 					}
-					lightsOnCh <- [2]int{f, d}
 				}
 
 			case wv.DeleteProposed:
@@ -152,7 +167,6 @@ func syncHallOrders(
 				if allAgree {
 					//fmt.Printf("[Sync][Steg2] Konsensus! DeleteProposed->None floor=%d dir=%s\n", f, dirName(d))
 					myHallOrders[f][d] = wv.Order{SyncState: wv.None, OwnerID: wv.NoOwner}
-					lightsOffCh <- [2]int{f, d}
 				}
 			}
 		}
@@ -175,7 +189,7 @@ func GoRoutineSync(
 	for {
 		latestWorldviews := <-worldviewToSyncCh
 		//fmt.Printf("[Sync] Mottok worldview-oppdatering (%d peers)\n", len(latestWorldviews))
-		syncedHallOrders := syncHallOrders(latestWorldviews, myID, lightsOnCh, lightsOffCh)
+		syncedHallOrders := syncHallOrders(latestWorldviews, myID)
 		//fmt.Printf("[Sync] Sender synkede hallorders tilbake til worldview\n")
 		syncToWorldviewCh <- syncedHallOrders
 	}
