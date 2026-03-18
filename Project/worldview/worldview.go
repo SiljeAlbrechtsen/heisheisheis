@@ -46,16 +46,8 @@ type Order = t.Order
 
 type HallOrders = t.HallOrders
 
-// Struct for egen worldview
-type Worldview struct {
-	IdElevator   string
-	HallOrders   HallOrders
-	State        fsm.ElevatorState
-	AllCabOrders map[string][NumFloors]bool
-	ErrorState   bool // Settes ved motorstopp/obstruction — hopp over i Steg 2 og assignment
-	Dead         bool // Settes ved nettverkstap — hopp over i Steg 1 og Steg 2 og assignment
-	//mu           sync.RWMutex // Beskytter AllCabOrders
-}
+// Worldview is now imported from types
+type Worldview = t.Worldview
 
 func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Worldview) Worldview {
 	myWv := myWorldview
@@ -142,7 +134,7 @@ func dirToIndex(d fsm.Direction) int {
 // Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere state og
 //
 //	ordre i worldview.
-func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator fsm.ElevatorState, myID string) Worldview {
+func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.ElevatorState, myID string) Worldview {
 	wv := worldview
 	prevState := wv.State
 	wv.State = inputStateElevator
@@ -270,7 +262,7 @@ func debugPrintHallOrders(context string, hallOrders HallOrders) {
 
 func GoroutineForWorldview(
 	myID string,
-	elevatorToWorldviewCh <-chan fsm.ElevatorState,
+	elevatorToWorldviewCh <-chan t.ElevatorState,
 	syncToWorldviewCh <-chan HallOrders,
 	networkToWorldviewCh <-chan Worldview,
 	networkToInitCh <-chan Worldview,

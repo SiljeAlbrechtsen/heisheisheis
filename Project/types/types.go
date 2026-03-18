@@ -64,6 +64,16 @@ type Order struct {
 
 type HallOrders [N_FLOORS][2]Order
 
+// Worldview type — used across FSM, worldview, and assignment packages
+type Worldview struct {
+	IdElevator   string
+	HallOrders   HallOrders
+	State        ElevatorState
+	AllCabOrders map[string][N_FLOORS]bool
+	ErrorState   bool // Settes ved motorstopp/obstruction
+	Dead         bool // Settes ved nettverkstap
+}
+
 func InitElevatorState() ElevatorState {
 	return ElevatorState{
 		Floor:     -1,

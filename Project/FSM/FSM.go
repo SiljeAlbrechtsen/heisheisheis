@@ -6,14 +6,17 @@ import (
 
 	elevio "Project/Driver"
 	hardware "Project/Hardware"
+	t "Project/types"
 )
 
-func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, printHallOrdersReqCh chan bool) {
+func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState, printHallOrdersReqCh chan bool) {
 
 	obstruct := false
 
 	elevatorState := InitElevatorState()
 	InitElevator(&elevatorState, elevatorStateCh)
+
+	var prevWorldview t.Worldview // Track previous worldview to detect Unconfirmed->Confirmed transitions
 
 	// Cab-lys ticker — kun for periodisk oppdatering av cab-lys
 	floorTicker := time.NewTicker(500 * time.Millisecond)
@@ -37,10 +40,12 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, p
 
 	for {
 		select {
-		case newRequests := <-assignerToFsmCh:
-			fmt.Printf("*********\n%f\n*********\n", newRequests)
-			mergedState := updateElevatorRequests(elevatorState, newRequests)
-			updateRequests(mergedState.Requests, &elevatorState, elevatorStateCh) // TODO: Fjerne?
+
+		case worldview := <-worldviewToFSMCh:
+			// Merge requests: only add if order transitioned from Unconfirmed to Confirmed
+			mergedRequests := mergeRequestsFromWorldviewTransitions(elevatorState.Requests, prevWorldview, worldview)
+			updateRequests(mergedRequests, &elevatorState, elevatorStateCh)
+			prevWorldview = worldview
 
 			if requests_shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
@@ -52,6 +57,8 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, p
 				db := requests_chooseDirection(elevatorState)
 				applyDecision(db, &elevatorState, elevatorStateCh)
 			}
+
+			//Legge til ticker hit
 
 		case <-doorTimer:
 			doorTimer = nil
@@ -127,6 +134,40 @@ func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
 }
 
 // Helper functions for FSM3
+
+// mergeRequestsFromWorldviewTransitions only adds requests for hall orders that transitioned from Unconfirmed to Confirmed
+func mergeRequestsFromWorldviewTransitions(currentRequests [N_FLOORS][N_BUTTONS]bool, prevWorldview, newWorldview t.Worldview) [N_FLOORS][N_BUTTONS]bool {
+	requests := currentRequests
+
+	// Check hall requests: add only if they transitioned from Unconfirmed -> Confirmed
+	for f := 0; f < N_FLOORS; f++ {
+		upOrder := newWorldview.HallOrders[f][B_HallUp]
+		prevUpOrder := prevWorldview.HallOrders[f][B_HallUp]
+		// If order was Unconfirmed and is now Confirmed (newly assigned), add it
+		if prevUpOrder.SyncState == t.Unconfirmed && upOrder.SyncState == t.Confirmed {
+			requests[f][B_HallUp] = true
+		}
+
+		downOrder := newWorldview.HallOrders[f][B_HallDown]
+		prevDownOrder := prevWorldview.HallOrders[f][B_HallDown]
+		// If order was Unconfirmed and is now Confirmed (newly assigned), add it
+		if prevDownOrder.SyncState == t.Unconfirmed && downOrder.SyncState == t.Confirmed {
+			requests[f][B_HallDown] = true
+		}
+	}
+
+	// Cab requests: add if they exist in AllCabOrders
+	if newWorldview.AllCabOrders != nil {
+		for f := 0; f < N_FLOORS; f++ {
+			if newWorldview.AllCabOrders[newWorldview.IdElevator][f] {
+				requests[f][B_Cab] = true
+			}
+		}
+	}
+
+	return requests
+}
+
 func updateElevatorRequests(elevatorState ElevatorState, newRequests [4][3]bool) ElevatorState {
 	for f := 0; f < N_FLOORS; f++ {
 		for b := 0; b < N_BUTTONS; b++ {
