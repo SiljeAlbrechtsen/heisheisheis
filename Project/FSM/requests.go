@@ -45,6 +45,9 @@ func requests_below(e ElevatorState) bool {
 
 // requests_here returns true if there are any requests at current floor
 func requests_here(e ElevatorState) bool {
+	if e.Floor < 0 || e.Floor >= N_FLOORS {
+		return false
+	}
 	for btn := 0; btn < N_BUTTONS; btn++ {
 		if e.Requests[e.Floor][btn] {
 			return true
@@ -96,6 +99,9 @@ func requests_chooseDirection(e ElevatorState) DirnBehaviourPair {
 
 // requests_shouldStop (exact C logic)
 func requests_shouldStop(e ElevatorState) bool {
+	if e.Floor < 0 || e.Floor >= N_FLOORS {
+		return true
+	}
 
 	if e.Behaviour == EB_DoorOpen {
 		return true
@@ -153,6 +159,9 @@ func requests_shouldServeCurrentFloor(e ElevatorState) bool {
 
 // requests_clearAtCurrentFloor (exact C logic, returns new Elevator)
 func requests_clearAtCurrentFloor(e ElevatorState) ElevatorState {
+	if e.Floor < 0 || e.Floor >= N_FLOORS {
+		return e
+	}
 	e.Requests[e.Floor][B_Cab] = false
 	switch e.Dirn {
 	case D_Up:

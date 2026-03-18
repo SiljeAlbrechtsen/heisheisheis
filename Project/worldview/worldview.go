@@ -62,8 +62,11 @@ func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Wo
 				continue
 			}
 
-			// Koprierer alle cab og hallorders
-			myWv.AllCabOrders = incomingWv.AllCabOrders
+			// Dyp kopi av cab orders (map-tilordning kopierer bare pekeren) Endret til deep copy
+			myWv.AllCabOrders = make(map[string][NumFloors]bool, len(incomingWv.AllCabOrders))
+			for id, orders := range incomingWv.AllCabOrders {
+				myWv.AllCabOrders[id] = orders
+			}
 			myWv.HallOrders = incomingWv.HallOrders
 
 			return myWv // ferdig init
@@ -82,23 +85,46 @@ func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Wo
 // _____________________________________________________________________________
 
 // SYNC sin func
+// shouldAcceptSyncOrder avgjør om sync-resultatet er gyldig fremgang
+// og ikke et stale resultat som ville regresse lokal tilstand.
+func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
+	// Peer-death: ikke la stale Confirmed overskrive Unconfirmed fra peer-death,
+	// men aksepter legitim konsensus (OwnerID="" betyr at sync faktisk avanserte)
+	if localOrder.OwnerID == PeerDied && localOrder.SyncState == Unconfirmed &&
+		syncOrder.SyncState == Confirmed && syncOrder.OwnerID != NoOwner {
+		return false
+	}
+
+	// Samme state: alltid OK
+	if syncOrder.SyncState == localOrder.SyncState {
+		return true
+	}
+
+	// Fremover i syklusen: sync >= local (numerisk)
+	if syncOrder.SyncState > localOrder.SyncState {
+		return true
+	}
+
+	// Syklus-fullføring: DeleteProposed → None (konsensus)
+	if localOrder.SyncState == DeleteProposed && syncOrder.SyncState == None {
+		return true
+	}
+
+	// Alt annet er stale — behold lokal tilstand
+	return false
+}
+
 func updateWorldviewFromSync(latestWorldviews map[string]Worldview, inputSyncedHallOrders HallOrders, myID string) map[string]Worldview {
 	worldviewsMap := latestWorldviews
 	worldview := worldviewsMap[myID]
 
-	// Merge sync-resultater med lokal state.
-	// Sync kan jobbe med utdatert data (pga send-latest), så vi må beskytte
-	// lokale endringer som sync ikke har sett ennå.
 	for f := 0; f < NumFloors; f++ {
 		for d := 0; d < Directions; d++ {
 			localOrder := worldview.HallOrders[f][d]
 			syncOrder := inputSyncedHallOrders[f][d]
 
-			// Ikke la stale sync-resultat overskrive peer-death-tilstand.
-			// Hvis vi lokalt har satt Unconfirmed pga peer-død, og sync
-			// returnerer Confirmed fra gammel data, behold lokal state.
-			if localOrder.OwnerID == PeerDied && localOrder.SyncState == Unconfirmed &&
-				syncOrder.SyncState == Confirmed {
+			if !shouldAcceptSyncOrder(localOrder, syncOrder) {
+				// Stale sync-resultat — behold lokal tilstand
 				inputSyncedHallOrders[f][d] = localOrder
 				continue
 			}
@@ -297,7 +323,7 @@ func GoroutineForWorldview(
 	newPeerIdCh <-chan string,
 	cabBtnCh <-chan int,
 	hallBtnCh <-chan [2]int,
-	hallLightsCh chan HallOrders,
+	lightsCh chan Worldview,
 	printHallOrdersReqCh <-chan bool, //ToDO Fjern etter testing
 
 	assignerToWorldviewCh <-chan map[string][4][3]bool,
@@ -332,15 +358,16 @@ func GoroutineForWorldview(
 		return c
 	}
 
-	sendLatestHallOrders := func(hallOrders HallOrders) {
+	sendLatestLights := func() {
+		wv := copyMap(worldviewsMap)[myID]
 		select {
-		case hallLightsCh <- hallOrders:
+		case lightsCh <- wv:
 		default:
 			select {
-			case <-hallLightsCh:
+			case <-lightsCh:
 			default:
 			}
-			hallLightsCh <- hallOrders
+			lightsCh <- wv
 		}
 	}
 
@@ -409,7 +436,7 @@ func GoroutineForWorldview(
 			}
 
 			worldviewsMap[myID] = myWorldview
-			sendLatestHallOrders(myWorldview.HallOrders)
+			sendLatestLights()
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestToSync(copyMap(worldviewsMap))
 
@@ -417,7 +444,7 @@ func GoroutineForWorldview(
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
 			myWorldview = worldviewsMap[myID]
 			sendLatestToAssigner(copyMap(worldviewsMap))
-			sendLatestHallOrders(myWorldview.HallOrders)
+			sendLatestLights()
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 
 		case inputPeerWorldview := <-networkToWorldviewCh:
@@ -438,6 +465,7 @@ func GoroutineForWorldview(
 
 			worldviewsMap[myID] = myWorldview
 			//DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
+			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestToSync(copyMap(worldviewsMap))
 
 		case newPeer := <-newPeerIdCh:
@@ -447,13 +475,14 @@ func GoroutineForWorldview(
 			//fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeer)
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
 			myWorldview = worldviewsMap[myID]
+			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestToSync(copyMap(worldviewsMap))
 
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = worldviewsMap[myID]
 			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
 			worldviewsMap[myID] = myWorldview
-			sendLatestHallOrders(myWorldview.HallOrders)
+			sendLatestLights()
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestToSync(copyMap(worldviewsMap))
 
@@ -463,7 +492,7 @@ func GoroutineForWorldview(
 
 			worldviewsMap[myID] = myWorldview
 			//DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
-			sendLatestHallOrders(myWorldview.HallOrders)
+			sendLatestLights()
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestToSync(copyMap(worldviewsMap))
 
@@ -474,7 +503,7 @@ func GoroutineForWorldview(
 			debugPrintHallOrders("after assignment", myWorldview.HallOrders) // TO DO: FJERN
 
 			worldviewsMap[myID] = myWorldview
-			sendLatestHallOrders(myWorldview.HallOrders)
+			sendLatestLights()
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestWorldviewToFSM(copyMap(worldviewsMap)[myID])
 
@@ -512,6 +541,9 @@ func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID s
 }
 
 func addNewCabOrder(worldview Worldview, inputCabBtn int, myID string) Worldview {
+	if inputCabBtn < 0 || inputCabBtn >= NumFloors {
+		return worldview
+	}
 	wv := worldview
 
 	cabOrders := wv.AllCabOrders[myID]
@@ -522,10 +554,12 @@ func addNewCabOrder(worldview Worldview, inputCabBtn int, myID string) Worldview
 }
 
 func addNewHallOrder(worldview Worldview, inputHallBtn [2]int) Worldview {
-	wv := worldview
-
 	floor := inputHallBtn[0]
 	dir := inputHallBtn[1]
+	if floor < 0 || floor >= NumFloors || dir < 0 || dir >= Directions {
+		return worldview
+	}
+	wv := worldview
 
 	order := wv.HallOrders[floor][dir]
 

@@ -55,10 +55,12 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 			// Start bevegelse umiddelbart ved nye bestillinger
 			if elevatorCanMove(elevatorState) {
 				db := requests_chooseDirection(elevatorState)
-				applyDecision(db, &elevatorState, elevatorStateCh)
+				if db.ElevatorBehaviour == EB_DoorOpen {
+					elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
+				} else {
+					applyDecision(db, &elevatorState, elevatorStateCh)
+				}
 			}
-
-			//Legge til ticker hit
 
 		case <-doorTimer:
 			doorTimer = nil
@@ -72,10 +74,13 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 				continue
 			}
 			db := requests_chooseDirection(elevatorState)
-			applyDecision(db, &elevatorState, elevatorStateCh)
+			if db.ElevatorBehaviour == EB_DoorOpen {
+				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
+			} else {
+				applyDecision(db, &elevatorState, elevatorStateCh)
+			}
 
 		case <-floorTicker.C:
-			refreshCabLights(elevatorState)
 			if !(obstruct && elevatorState.Behaviour == EB_DoorOpen) && elevio.GetFloor() != -1 {
 				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
 				resetTimer(errorTimer, 5*time.Second)
@@ -83,7 +88,11 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 			// Fallback: start bevegelse hvis heisen har bestillinger men ikke beveger seg
 			if elevatorCanMove(elevatorState) {
 				db := requests_chooseDirection(elevatorState)
-				applyDecision(db, &elevatorState, elevatorStateCh)
+				if db.ElevatorBehaviour == EB_DoorOpen {
+					elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
+				} else {
+					applyDecision(db, &elevatorState, elevatorStateCh)
+				}
 			}
 
 		case floor := <-floorSensorCh:
@@ -94,7 +103,11 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 			}
 			if elevatorCanMove(elevatorState) {
 				db := requests_chooseDirection(elevatorState)
-				applyDecision(db, &elevatorState, elevatorStateCh)
+				if db.ElevatorBehaviour == EB_DoorOpen {
+					elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
+				} else {
+					applyDecision(db, &elevatorState, elevatorStateCh)
+				}
 			}
 
 		case <-stopBtnCh:
@@ -250,12 +263,3 @@ func sendLatestBool(ch chan bool, v bool) {
 	}
 }
 
-func refreshCabLights(e ElevatorState) {
-	for f := 0; f < N_FLOORS; f++ {
-		if e.Requests[f][B_Cab] {
-			elevio.SetButtonLamp(elevio.BT_Cab, f, true)
-		} else {
-			elevio.SetButtonLamp(elevio.BT_Cab, f, false)
-		}
-	}
-}

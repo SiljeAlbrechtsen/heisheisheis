@@ -1,7 +1,5 @@
 package main
 
-//A-To do: Fikse at lights on sender caborders lys, sender kun hallorders atm. Også sender off signal dårlig.
-
 import (
 	elevio "Project/Driver"
 	fsm "Project/FSM"
@@ -41,8 +39,7 @@ func main() {
 	cabBtnCh := make(chan int, 8)
 	hallBtnCh := make(chan [2]int, 8)
 
-	//A-Jeg la disse til
-	hallLightsCh := make(chan wv.HallOrders, 1)
+	lightsCh := make(chan wv.Worldview, 1)
 	printHallOrdersReqCh := make(chan bool, 1) //Kan slettes til slutt. Kun debug
 
 	//From worldview
@@ -51,9 +48,6 @@ func main() {
 	worldviewToNetworkCh := make(chan wv.Worldview, 1)
 	worldviewToFSMCh := make(chan wv.Worldview, 16)
 
-	//From Sync
-	lightOnCh := make(chan [2]int)
-	lightsOffCh := make(chan [2]int)
 
 	// From assigner
 	//assignerToFsmCh := make(chan [4][3]bool, 1)
@@ -63,17 +57,15 @@ func main() {
 
 	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
 
-	go hardware.LightsListener2(hallLightsCh)
+	go hardware.ButtonLightsListener(lightsCh)
 
 	go hardware.ButtonsListener(cabBtnCh, hallBtnCh)
 
 	go setup.TransmitWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
 
-	go sync.GoRoutineSync(id, syncToWorldviewCh, worldviewToSyncCh, lightOnCh, lightsOffCh)
+	go sync.GoRoutineSync(id, syncToWorldviewCh, worldviewToSyncCh)
 
-	go hardware.LightsListener(lightOnCh, lightsOffCh)
-
-	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, networkToInitCh, lostPeerIdCh, newPeerIdCh, cabBtnCh, hallBtnCh, hallLightsCh, printHallOrdersReqCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh, worldviewToFSMCh)
+	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, networkToInitCh, lostPeerIdCh, newPeerIdCh, cabBtnCh, hallBtnCh, lightsCh, printHallOrdersReqCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh, worldviewToFSMCh)
 
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToWordviewCh)
 

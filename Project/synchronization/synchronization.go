@@ -179,16 +179,20 @@ func syncHallOrders(
 
 func GoRoutineSync(
 	myID string,
-	syncToWorldviewCh chan<- wv.HallOrders,
+	syncToWorldviewCh chan wv.HallOrders,
 	worldviewToSyncCh <-chan map[string]wv.Worldview,
-	lightsOnCh chan<- [2]int,
-	lightsOffCh chan<- [2]int,
 ) {
 	for {
 		latestWorldviews := <-worldviewToSyncCh
-		//fmt.Printf("[Sync] Mottok worldview-oppdatering (%d peers)\n", len(latestWorldviews))
 		syncedHallOrders := syncHallOrders(latestWorldviews, myID)
-		//fmt.Printf("[Sync] Sender synkede hallorders tilbake til worldview\n")
-		syncToWorldviewCh <- syncedHallOrders
+		select {
+		case syncToWorldviewCh <- syncedHallOrders:
+		default:
+			select {
+			case <-syncToWorldviewCh:
+			default:
+			}
+			syncToWorldviewCh <- syncedHallOrders
+		}
 	}
 }
