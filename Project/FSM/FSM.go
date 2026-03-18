@@ -78,18 +78,17 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, p
 				applyDecision(db, &elevatorState, elevatorStateCh)
 			}
 
+			if doorTimer != nil && obstruct {
+				sendLatestBool(errorLightCh, updateErrorState(obstruct, &elevatorState, elevatorStateCh))
+				doorTimer = time.After(3000 * time.Millisecond)
+			}
+
 		case <-stopBtnCh:
 			fmt.Println(elevatorState)
 			sendLatestBool(printHallOrdersReqCh, true)
 
 		case obstruct = <-obstructCh: //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
-			if doorTimer != nil && obstruct {
-				sendLatestBool(errorLightCh, updateErrorState(obstruct, &elevatorState, elevatorStateCh))
-			}
-			if doorTimer != nil && !obstruct {
-				sendLatestBool(errorLightCh, updateErrorState(obstruct, &elevatorState, elevatorStateCh))
-				doorTimer = time.After(3000 * time.Millisecond)
-			}
+
 		case <-errorTimer.C:
 			fmt.Println("Tiden er ute!")
 			sendLatestBool(errorLightCh, updateErrorState(true, &elevatorState, elevatorStateCh))

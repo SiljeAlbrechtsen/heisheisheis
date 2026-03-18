@@ -36,8 +36,10 @@ func main() {
 	assignerToWordviewCh := make(chan map[string][4][3]bool, 1)
 	cabBtnCh := make(chan int, 8)
 	hallBtnCh := make(chan [2]int, 8)
+
+	//A-Jeg la disse til
 	hallLightsCh := make(chan wv.HallOrders, 1)
-	printHallOrdersReqCh := make(chan bool, 1)
+	printHallOrdersReqCh := make(chan bool, 1)  //Kan slettes til slutt. Kun debug
 
 	//From worldview
 	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 1)
