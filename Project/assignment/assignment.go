@@ -131,7 +131,7 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (
 func RunHallRequestAssigner(
 	myID string,
 	worldviewToAssignerCh <-chan map[string]wv.Worldview,
-	assignerToFsmCh chan<- [4][3]bool,
+	//assignerToFsmCh chan<- [4][3]bool,
 	assignerToWordviewCh chan<- map[string][4][3]bool,
 ) {
 	var lastResult map[string][4][3]bool
@@ -146,7 +146,7 @@ func RunHallRequestAssigner(
 		// reflect.DeepEqual er med i standard bib. i go og brukes for å sammenligne maps.
 		if !reflect.DeepEqual(result, lastResult) {
 			//fmt.Println("Assigner: sender til FSM:", result[myID])
-			assignerToFsmCh <- result[myID]
+			//assignerToFsmCh <- result[myID]
 			assignerToWordviewCh <- result
 			lastResult = result
 		}

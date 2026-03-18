@@ -49,13 +49,14 @@ func main() {
 	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 1)
 	worldviewToSyncCh := make(chan map[string]wv.Worldview, 1)
 	worldviewToNetworkCh := make(chan wv.Worldview, 1)
+	worldviewToFSMCh := make(chan wv.Worldview, 1)
 
 	//From Sync
 	lightOnCh := make(chan [2]int)
 	lightsOffCh := make(chan [2]int)
 
 	// From assigner
-	assignerToFsmCh := make(chan [4][3]bool, 1)
+	//assignerToFsmCh := make(chan [4][3]bool, 1)
 
 	// Endret: peerUpdateCh returneres ikke lenger, se setup.go
 	newPeerIdCh, lostPeerIdCh := setup.StartPeerDiscovery(id)
@@ -72,11 +73,11 @@ func main() {
 
 	go hardware.LightsListener(lightOnCh, lightsOffCh)
 
-	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, networkToInitCh, lostPeerIdCh, newPeerIdCh, cabBtnCh, hallBtnCh, hallLightsCh, printHallOrdersReqCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh)
+	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, networkToInitCh, lostPeerIdCh, newPeerIdCh, cabBtnCh, hallBtnCh, hallLightsCh, printHallOrdersReqCh, assignerToWordviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh, worldviewToFSMCh)
 
-	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToFsmCh, assignerToWordviewCh)
+	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToWordviewCh)
 
-	go fsm.FSM3(assignerToFsmCh, elevatorToWorldviewCh, printHallOrdersReqCh)
+	go fsm.FSM3(worldviewToFSMCh, elevatorToWorldviewCh, printHallOrdersReqCh)
 
 	go setup.ForwardWorldviewFromNetwork(worldviewRx, networkToWorldviewCh, networkToInitCh)
 

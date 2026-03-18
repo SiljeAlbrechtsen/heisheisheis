@@ -287,6 +287,7 @@ func GoroutineForWorldview(
 	worldviewToAssignerCh chan<- map[string]Worldview,
 	worldviewToSyncCh chan<- map[string]Worldview,
 	worldviewToNetworkCh chan<- Worldview,
+	worldviewToFSMCh chan<- Worldview,
 ) {
 
 	worldviewsMap := make(map[string]Worldview)
@@ -409,6 +410,7 @@ func GoroutineForWorldview(
 			worldviewsMap[myID] = myWorldview
 			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
+			worldviewToFSMCh <- copyMap(worldviewsMap)[myID]
 
 		case <-printHallOrdersReqCh:
 			myWorldview = worldviewsMap[myID]
