@@ -93,7 +93,7 @@ func syncHallOrders(
 					continue
 
 				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState &&
-					myCurrentOrder.SyncState != wv.Unconfirmed {
+					myCurrentOrder.SyncState != wv.Unconfirmed && myCurrentOrder.SyncState != wv.DeleteProposed {
 					//fmt.Printf("[Sync][Steg1] Følger %s: floor=%d dir=%s %s->%s\n",
 					//	peer.IdElevator, f, dirName(d),
 					//	syncStateName(myCurrentOrder.SyncState),
