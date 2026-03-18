@@ -3,6 +3,7 @@ package main
 //A-To do: Fikse at lights on sender caborders lys, sender kun hallorders atm. Også sender off signal dårlig.
 
 import (
+	elevio "Project/Driver"
 	fsm "Project/FSM"
 	hardware "Project/Hardware"
 	"Project/Network/setup"
@@ -18,9 +19,12 @@ import (
 )
 
 // TODO: må vi ha strl på input-variabler?
+// TODO: Sjekke feil der fsm ikke ser sine egne hallorders
+// TODO: Sjekke init til driveren, mye spaghetti der nå
 
 func main() {
-	t.InitDriver()
+	addr := t.ResolveElevatorAddr()
+	elevio.Init(addr, 4)
 
 	// `go run main.go -id=our_id`
 	id := setup.GetNodeID()
@@ -39,7 +43,7 @@ func main() {
 
 	//A-Jeg la disse til
 	hallLightsCh := make(chan wv.HallOrders, 1)
-	printHallOrdersReqCh := make(chan bool, 1)  //Kan slettes til slutt. Kun debug
+	printHallOrdersReqCh := make(chan bool, 1) //Kan slettes til slutt. Kun debug
 
 	//From worldview
 	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 1)

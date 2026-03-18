@@ -46,7 +46,7 @@ func sendState(elevatorState *ElevatorState, elevatorStateCh chan ElevatorState)
 }
 
 func updateFloor(floor int, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	elevio.SetFloorIndicator(elevio.GetFloor())
+	elevio.SetFloorIndicator(floor)
 	if elevatorState.Floor == floor {
 		return
 	}

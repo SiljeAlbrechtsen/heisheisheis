@@ -79,9 +79,9 @@ func syncHallOrders(
 	}
 	//fmt.Printf("[Sync] Starter synk for %s | peers: %s\n", myID, peerList)
 
-	// Steg 1: Følg peers som er ett steg foran
+	// Steg 1: Følg peers som er ett steg foran (hopp kun over Dead, ikke ErrorState)
 	for _, peer := range latestWorldviews {
-		if peer.ErrorState {
+		if peer.Dead {
 			continue
 		}
 		for f := 0; f < wv.NumFloors; f++ {
@@ -114,7 +114,7 @@ func syncHallOrders(
 			case wv.Unconfirmed:
 				allAgree := true
 				for _, peer := range latestWorldviews {
-					if peer.ErrorState {
+					if peer.Dead {
 						continue
 					}
 					peerState := peer.HallOrders[f][d].SyncState
@@ -138,7 +138,7 @@ func syncHallOrders(
 			case wv.DeleteProposed:
 				allAgree := true
 				for _, peer := range latestWorldviews {
-					if peer.ErrorState {
+					if peer.Dead {
 						continue
 					}
 					peerState := peer.HallOrders[f][d].SyncState

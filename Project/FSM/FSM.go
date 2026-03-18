@@ -15,12 +15,17 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, p
 	elevatorState := InitElevatorState()
 	InitElevator(&elevatorState, elevatorStateCh)
 
-	floorTicker := time.NewTicker(50 * time.Millisecond) //A-TO DO: Fjern hardkoding
+	// Cab-lys ticker — kun for periodisk oppdatering av cab-lys
+	floorTicker := time.NewTicker(500 * time.Millisecond)
 	defer floorTicker.Stop()
+
+	// Etasjesensor med 20ms polling — håndterer all etasjelogikk
+	floorSensorCh := make(chan int)
+	go elevio.PollFloorSensor(floorSensorCh)
 
 	var doorTimer <-chan time.Time
 	doorTimer = nil
-	errorTimer := time.NewTimer(5 * time.Second) //TODO: Fjern hardkoding
+	errorTimer := time.NewTimer(5 * time.Second)
 	defer stopAndDrainTimer(errorTimer)
 
 	stopBtnCh := make(chan bool)
@@ -30,24 +35,30 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, p
 	go elevio.PollObstructionSwitch(obstructCh)
 	go hardware.ErrorLight(errorLightCh)
 
-	for { // 4 sjekk om det trenges å sjekke door open i should stop, 5 sjekk om det trenges å sjekke door open i should clear immediately
-		// 6 Forenkle is setningene. kanskje en funksjon som sjekker om det skal bli tru eller ey
+	for {
 		select {
 		case newRequests := <-assignerToFsmCh:
 			mergedState := updateElevatorRequests(elevatorState, newRequests)
 			updateRequests(mergedState.Requests, &elevatorState, elevatorStateCh)
 
-			if requests_shouldServeCurrentFloor(elevatorState) { //A-Her skal sjekke om låv å betjene
+			if requests_shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-				fmt.Println("###\nServing current floor immediately after receiving new requests\n###") //TO DO: FJERN
+				fmt.Println("###\nServing current floor immediately after receiving new requests\n###")
 				continue
 			}
+			// Start bevegelse umiddelbart ved nye bestillinger
+			if elevatorCanMove(elevatorState) {
+				db := requests_chooseDirection(elevatorState)
+				applyDecision(db, &elevatorState, elevatorStateCh)
+			}
 
+		
 		case <-doorTimer:
 			doorTimer = nil
-			if elevatorState.Error {
-				//fmt.Println("Y")
+			// Hold døren åpen så lenge obstruction er aktiv eller heisen er i error
+			if obstruct || elevatorState.Error {
 				doorTimer = time.After(3000 * time.Millisecond)
+				continue
 			}
 			if requests_shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
@@ -56,45 +67,41 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, p
 			db := requests_chooseDirection(elevatorState)
 			applyDecision(db, &elevatorState, elevatorStateCh)
 
-		case <-floorTicker.C: // alt av heis logikk
-
+		case <-floorTicker.C:
 			refreshCabLights(elevatorState)
-
-			if elevio.GetFloor() != -1 {
-				updateFloor(elevio.GetFloor(), &elevatorState, elevatorStateCh)
-				if !(obstruct && elevatorState.Behaviour == EB_DoorOpen) {
-					//fmt.Println("Reset")
-					sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
-					resetTimer(errorTimer, 5*time.Second)
-				}
+			if !(obstruct && elevatorState.Behaviour == EB_DoorOpen) && elevio.GetFloor() != -1 {
+				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
+				resetTimer(errorTimer, 5*time.Second)
 			}
 
-			if doorTimer == nil && elevio.GetFloor() != -1 && elevatorState.Behaviour == EB_Moving {
+		case floor := <-floorSensorCh:
+			updateFloor(floor, &elevatorState, elevatorStateCh)
+
+			if doorTimer == nil && elevatorState.Behaviour == EB_Moving {
 				elevatorState, doorTimer = clearFloorRequests(elevatorState, elevatorStateCh)
 			}
-
 			if elevatorCanMove(elevatorState) {
 				db := requests_chooseDirection(elevatorState)
 				applyDecision(db, &elevatorState, elevatorStateCh)
 			}
 
-			if doorTimer != nil && obstruct {
-				sendLatestBool(errorLightCh, updateErrorState(obstruct, &elevatorState, elevatorStateCh))
-				doorTimer = time.After(3000 * time.Millisecond)
-			}
 
 		case <-stopBtnCh:
 			fmt.Println(elevatorState)
 			sendLatestBool(printHallOrdersReqCh, true)
 
-		case obstruct = <-obstructCh: //A-Må kunn hente obstruction selv om den ikke er i åpen dør, eller mulig
+		case obstruct = <-obstructCh:
+			// Rydd error-state umiddelbart når obstruction fjernes
+			if !obstruct {
+				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
+				resetTimer(errorTimer, 5*time.Second)
+			}
 
 		case <-errorTimer.C:
 			fmt.Println("Tiden er ute!")
 			sendLatestBool(errorLightCh, updateErrorState(true, &elevatorState, elevatorStateCh))
 			fmt.Println(elevatorState)
 		}
-
 	}
 }
 
@@ -166,7 +173,7 @@ func openDoorAndClearCurrentFloor(elevatorState ElevatorState, elevatorStateCh c
 }
 
 func elevatorCanMove(e ElevatorState) bool {
-	if e.Behaviour != EB_DoorOpen && requests_checkForRequests(e) && elevio.GetFloor() != -1 {
+	if e.Behaviour != EB_DoorOpen && !e.Error && requests_checkForRequests(e) && elevio.GetFloor() != -1 {
 		return true
 	}
 	return false

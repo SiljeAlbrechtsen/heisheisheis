@@ -1,7 +1,6 @@
 package types
 
 import (
-	elevio "Project/Driver"
 	"net"
 	"os"
 	"os/exec"
@@ -65,13 +64,7 @@ type Order struct {
 
 type HallOrders [N_FLOORS][2]Order
 
-func InitDriver() {
-	addr := resolveElevatorAddr()
-	elevio.Init(addr, N_FLOORS)
-}
-
 func InitElevatorState() ElevatorState {
-	InitDriver()
 	return ElevatorState{
 		Floor:     -1,
 		Dirn:      D_Stop,
@@ -83,7 +76,7 @@ func InitElevatorState() ElevatorState {
 	}
 }
 
-func resolveElevatorAddr() string {
+func ResolveElevatorAddr() string {
 	if addr := strings.TrimSpace(os.Getenv("ELEVATOR_ADDR")); addr != "" {
 		return addr
 	}

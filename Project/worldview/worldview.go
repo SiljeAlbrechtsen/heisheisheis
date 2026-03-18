@@ -9,12 +9,11 @@ import (
 	"time"
 )
 
+//TODO
 /*
-Merge obstruction
-Fikse at en heis tar over hall orders når en heis dør.
-Teste lys + motorstopp.
-Se på feilhåndtering til assigner.
-Teste mer
+Teste mergingen
+Legge til timer på obstruction
+Lage logikk for når en heis kommer tilbake etter mistet internett. Kopiere bare hall orders. Hvordan skal den gjøre det?
 
 */
 
@@ -36,7 +35,7 @@ const (
 // type CabOrders [NumFloors]bool // Må vel ikke deklareres først?
 type OrderSyncState = t.OrderSyncState
 
-const (
+const ( //TODO: Fjerne disse og bruk types direkte
 	None           = t.None
 	Unconfirmed    = t.Unconfirmed
 	Confirmed      = t.Confirmed
@@ -53,7 +52,8 @@ type Worldview struct {
 	HallOrders   HallOrders
 	State        fsm.ElevatorState
 	AllCabOrders map[string][NumFloors]bool
-	ErrorState   bool
+	ErrorState   bool // Settes ved motorstopp/obstruction — hopp over i Steg 2 og assignment
+	Dead         bool // Settes ved nettverkstap — hopp over i Steg 1 og Steg 2 og assignment
 	//mu           sync.RWMutex // Beskytter AllCabOrders
 }
 
@@ -280,7 +280,7 @@ func GoroutineForWorldview(
 	cabBtnCh <-chan int,
 	hallBtnCh <-chan [2]int,
 	hallLightsCh chan HallOrders,
-	printHallOrdersReqCh <-chan bool,
+	printHallOrdersReqCh <-chan bool, //ToDO Fjern etter testing
 
 	assignerToWorldviewCh <-chan map[string][4][3]bool,
 
@@ -334,6 +334,13 @@ func GoroutineForWorldview(
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
 			}
 
+			if inputStateElevator.Error {
+				myWorldview.ErrorState = true
+				myWorldview.HallOrders = markPeerDeadInHallOrders(myWorldview.HallOrders, myID)
+			} else {
+				myWorldview.ErrorState = false
+			}
+
 			worldviewsMap[myID] = myWorldview
 			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
@@ -357,6 +364,10 @@ func GoroutineForWorldview(
 			}
 
 			myWorldview.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.AllCabOrders[inputPeerWorldview.IdElevator]
+
+			if inputPeerWorldview.ErrorState {
+				myWorldview.HallOrders = markPeerDeadInHallOrders(myWorldview.HallOrders, inputPeerWorldview.IdElevator)
+			}
 
 			worldviewsMap[myID] = myWorldview
 			//DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
@@ -421,7 +432,7 @@ func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID s
 	}
 	lwv := latestWorldviews
 	lostWorldview := lwv[lostID]
-	lostWorldview.ErrorState = true
+	lostWorldview.Dead = true
 	lwv[lostID] = lostWorldview
 
 	wv := lwv[myID]

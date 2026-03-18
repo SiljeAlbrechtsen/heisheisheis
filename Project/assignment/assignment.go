@@ -82,7 +82,7 @@ func buildInputHallRequestAssigner(latestWorldviews map[string]wv.Worldview, MyI
 
 	states := make(map[string]stateInputJSON)
 	for id, worldview := range latestWorldviews {
-		if worldview.ErrorState {
+		if worldview.Dead || worldview.ErrorState {
 			continue
 		}
 		states[id] = buildState(id, worldview)
