@@ -279,7 +279,7 @@ func GoroutineForWorldview(
 	worldviewToAssignerCh chan<- map[string]Worldview,
 	worldviewToSyncCh chan<- map[string]Worldview,
 	worldviewToNetworkCh chan<- Worldview,
-	worldviewToFSMCh chan<- Worldview,
+	worldviewToFSMCh chan<- Worldview, //TODO
 ) {
 
 	worldviewsMap := make(map[string]Worldview)
@@ -365,6 +365,7 @@ func GoroutineForWorldview(
 			worldviewsMap[myID] = myWorldview
 			//DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
 			worldviewToSyncCh <- copyMap(worldviewsMap)
+			//worldviewToFSMCh <- copyMap(worldviewsMap)[myID]
 
 		case newPeer := <-newPeerIdCh:
 			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeer)
@@ -402,7 +403,7 @@ func GoroutineForWorldview(
 			worldviewsMap[myID] = myWorldview
 			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
-			worldviewToFSMCh <- copyMap(worldviewsMap)[myID]
+			worldviewToFSMCh <- copyMap(worldviewsMap)[myID] //todo
 
 		case <-printHallOrdersReqCh:
 			myWorldview = worldviewsMap[myID]

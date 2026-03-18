@@ -49,7 +49,7 @@ func main() {
 	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 1)
 	worldviewToSyncCh := make(chan map[string]wv.Worldview, 1)
 	worldviewToNetworkCh := make(chan wv.Worldview, 1)
-	worldviewToFSMCh := make(chan wv.Worldview, 1)
+	worldviewToFSMCh := make(chan wv.Worldview, 16)
 
 	//From Sync
 	lightOnCh := make(chan [2]int)
