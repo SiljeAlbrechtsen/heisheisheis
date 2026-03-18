@@ -15,6 +15,8 @@ Teste mergingen
 Legge til timer på obstruction
 Lage logikk for når en heis kommer tilbake etter mistet internett. Kopiere bare hall orders. Hvordan skal den gjøre det?
 
+
+Trykket på en hall order, akkurat når den arriver der. Da klarte den ikke fjerne ordren betjene ny ordre. 
 */
 
 //______________________________________________________________________________________________________
@@ -461,8 +463,10 @@ func addNewHallOrder(worldview Worldview, inputHallBtn [2]int) Worldview {
 
 	order := wv.HallOrders[floor][dir]
 
-	order.SyncState = Unconfirmed
-	order.OwnerID = NoOwner
+	if order.SyncState == None {
+		order.SyncState = Unconfirmed
+		order.OwnerID = NoOwner
+	}
 
 	wv.HallOrders[floor][dir] = order
 
