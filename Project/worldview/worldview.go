@@ -208,19 +208,19 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 		return wv
 	}
 
-	// Propose delete only for hall requests this elevator has actually cleared on this floor.
+	// Propose delete kun hvis FSM faktisk hadde requesten og nå har clearet den.
+	// Ikke bruk OwnerID — FSM kan mangle requesten fordi den ikke har mottatt
+	// worldview-oppdateringen ennå.
 	upOrder := wv.HallOrders[floor][fsm.B_HallUp]
-	upWasCleared := (prevState.Requests[floor][fsm.B_HallUp] && !inputStateElevator.Requests[floor][fsm.B_HallUp]) ||
-		(upOrder.OwnerID == myID && !inputStateElevator.Requests[floor][fsm.B_HallUp])
-	if upOrder.SyncState == Confirmed && upWasCleared {
+	if upOrder.SyncState == Confirmed &&
+		prevState.Requests[floor][fsm.B_HallUp] && !inputStateElevator.Requests[floor][fsm.B_HallUp] {
 		upOrder.SyncState = DeleteProposed
 		wv.HallOrders[floor][fsm.B_HallUp] = upOrder
 	}
 
 	downOrder := wv.HallOrders[floor][fsm.B_HallDown]
-	downWasCleared := (prevState.Requests[floor][fsm.B_HallDown] && !inputStateElevator.Requests[floor][fsm.B_HallDown]) ||
-		(downOrder.OwnerID == myID && !inputStateElevator.Requests[floor][fsm.B_HallDown])
-	if downOrder.SyncState == Confirmed && downWasCleared {
+	if downOrder.SyncState == Confirmed &&
+		prevState.Requests[floor][fsm.B_HallDown] && !inputStateElevator.Requests[floor][fsm.B_HallDown] {
 		downOrder.SyncState = DeleteProposed
 		wv.HallOrders[floor][fsm.B_HallDown] = downOrder
 	}
