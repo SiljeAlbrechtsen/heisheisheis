@@ -289,9 +289,9 @@ func GoroutineForWorldview(
 
 	assignerToWorldviewCh <-chan map[string][4][3]bool,
 
-	worldviewToAssignerCh chan<- map[string]Worldview,
-	worldviewToSyncCh chan<- map[string]Worldview,
-	worldviewToNetworkCh chan<- Worldview,
+	worldviewToAssignerCh chan map[string]Worldview,
+	worldviewToSyncCh chan map[string]Worldview,
+	worldviewToNetworkCh chan Worldview,
 	worldviewToFSMCh chan Worldview, //TODO
 ) {
 
@@ -343,6 +343,42 @@ func GoroutineForWorldview(
 		}
 	}
 
+	sendLatestToNetwork := func(worldview Worldview) {
+		select {
+		case worldviewToNetworkCh <- worldview:
+		default:
+			select {
+			case <-worldviewToNetworkCh:
+			default:
+			}
+			worldviewToNetworkCh <- worldview
+		}
+	}
+
+	sendLatestToSync := func(worldviews map[string]Worldview) {
+		select {
+		case worldviewToSyncCh <- worldviews:
+		default:
+			select {
+			case <-worldviewToSyncCh:
+			default:
+			}
+			worldviewToSyncCh <- worldviews
+		}
+	}
+
+	sendLatestToAssigner := func(worldviews map[string]Worldview) {
+		select {
+		case worldviewToAssignerCh <- worldviews:
+		default:
+			select {
+			case <-worldviewToAssignerCh:
+			default:
+			}
+			worldviewToAssignerCh <- worldviews
+		}
+	}
+
 	for {
 		select {
 		case inputStateElevator := <-elevatorToWorldviewCh:
@@ -361,15 +397,15 @@ func GoroutineForWorldview(
 
 			worldviewsMap[myID] = myWorldview
 			sendLatestHallOrders(myWorldview.HallOrders)
-			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
-			worldviewToSyncCh <- copyMap(worldviewsMap)
+			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
+			sendLatestToSync(copyMap(worldviewsMap))
 
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
 			myWorldview = worldviewsMap[myID]
-			worldviewToAssignerCh <- copyMap(worldviewsMap)
+			sendLatestToAssigner(copyMap(worldviewsMap))
 			sendLatestHallOrders(myWorldview.HallOrders)
-			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
+			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 
 		case inputPeerWorldview := <-networkToWorldviewCh:
 			if inputPeerWorldview.IdElevator == myID {
@@ -389,7 +425,7 @@ func GoroutineForWorldview(
 
 			worldviewsMap[myID] = myWorldview
 			//DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
-			worldviewToSyncCh <- copyMap(worldviewsMap)
+			sendLatestToSync(copyMap(worldviewsMap))
 
 		case newPeer := <-newPeerIdCh:
 			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeer)
@@ -398,15 +434,15 @@ func GoroutineForWorldview(
 			//fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeer)
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
 			myWorldview = worldviewsMap[myID]
-			worldviewToSyncCh <- copyMap(worldviewsMap)
+			sendLatestToSync(copyMap(worldviewsMap))
 
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = worldviewsMap[myID]
 			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
 			worldviewsMap[myID] = myWorldview
 			sendLatestHallOrders(myWorldview.HallOrders)
-			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
-			worldviewToSyncCh <- copyMap(worldviewsMap)
+			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
+			sendLatestToSync(copyMap(worldviewsMap))
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = worldviewsMap[myID]
@@ -415,8 +451,8 @@ func GoroutineForWorldview(
 			worldviewsMap[myID] = myWorldview
 			//DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
 			sendLatestHallOrders(myWorldview.HallOrders)
-			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
-			worldviewToSyncCh <- copyMap(worldviewsMap)
+			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
+			sendLatestToSync(copyMap(worldviewsMap))
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview = worldviewsMap[myID]
@@ -426,8 +462,8 @@ func GoroutineForWorldview(
 
 			worldviewsMap[myID] = myWorldview
 			sendLatestHallOrders(myWorldview.HallOrders)
-			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
-			sendLatestWorldviewToFSM(copyMap(worldviewsMap)[myID]) //TODO
+			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
+			sendLatestWorldviewToFSM(copyMap(worldviewsMap)[myID])
 
 		case <-printHallOrdersReqCh:
 			myWorldview = worldviewsMap[myID]
