@@ -38,8 +38,9 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, p
 	for {
 		select {
 		case newRequests := <-assignerToFsmCh:
+			fmt.Printf("*********\n%f\n*********\n", newRequests)
 			mergedState := updateElevatorRequests(elevatorState, newRequests)
-			updateRequests(mergedState.Requests, &elevatorState, elevatorStateCh)
+			updateRequests(mergedState.Requests, &elevatorState, elevatorStateCh) // TODO: Fjerne?
 
 			if requests_shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
@@ -52,7 +53,6 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, p
 				applyDecision(db, &elevatorState, elevatorStateCh)
 			}
 
-		
 		case <-doorTimer:
 			doorTimer = nil
 			// Hold døren åpen så lenge obstruction er aktiv eller heisen er i error
@@ -73,6 +73,11 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, p
 				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
 				resetTimer(errorTimer, 5*time.Second)
 			}
+			// Fallback: start bevegelse hvis heisen har bestillinger men ikke beveger seg
+			if elevatorCanMove(elevatorState) {
+				db := requests_chooseDirection(elevatorState)
+				applyDecision(db, &elevatorState, elevatorStateCh)
+			}
 
 		case floor := <-floorSensorCh:
 			updateFloor(floor, &elevatorState, elevatorStateCh)
@@ -84,7 +89,6 @@ func FSM3(assignerToFsmCh chan [4][3]bool, elevatorStateCh chan ElevatorState, p
 				db := requests_chooseDirection(elevatorState)
 				applyDecision(db, &elevatorState, elevatorStateCh)
 			}
-
 
 		case <-stopBtnCh:
 			fmt.Println(elevatorState)

@@ -349,9 +349,9 @@ func GoroutineForWorldview(
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
 			myWorldview = worldviewsMap[myID]
+			worldviewToAssignerCh <- copyMap(worldviewsMap)
 			sendLatestHallOrders(myWorldview.HallOrders)
 			worldviewToNetworkCh <- copyMap(worldviewsMap)[myID]
-			worldviewToAssignerCh <- copyMap(worldviewsMap)
 
 		case inputPeerWorldview := <-networkToWorldviewCh:
 			if inputPeerWorldview.IdElevator == myID {
