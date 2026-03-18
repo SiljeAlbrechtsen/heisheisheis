@@ -109,10 +109,10 @@ func syncHallOrders(
 					//	peer.IdElevator, f, dirName(d),
 					//	syncStateName(myCurrentOrder.SyncState),
 					//	syncStateName(peerCurrentOrder.SyncState))
-					myHallOrders[f][d] = peerCurrentOrder
+					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
 				}
 				if SecondToNextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
-					myHallOrders[f][d] = peerCurrentOrder
+					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
 				}
 			}
 		}

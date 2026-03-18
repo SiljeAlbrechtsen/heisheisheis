@@ -204,25 +204,38 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 		}
 	}
 
-	if inputStateElevator.Behaviour != fsm.EB_DoorOpen {
+	// Sjekk for servede hall-ordrer:
+	// Case 1: FSM er DoorOpen nå (normal case - sjekk nåværende etasje)
+	// Case 2: FSM VAR DoorOpen og har akkurat lukket døren (fanger opp missed clears)
+	checkFloor := -1
+	if inputStateElevator.Behaviour == fsm.EB_DoorOpen {
+		checkFloor = floor
+	} else if prevState.Behaviour == fsm.EB_DoorOpen {
+		checkFloor = prevState.Floor
+	}
+
+	if checkFloor < 0 || checkFloor >= NumFloors {
 		return wv
 	}
 
-	// Propose delete kun hvis FSM faktisk hadde requesten og nå har clearet den.
-	// Ikke bruk OwnerID — FSM kan mangle requesten fordi den ikke har mottatt
-	// worldview-oppdateringen ennå.
-	upOrder := wv.HallOrders[floor][fsm.B_HallUp]
+	upOrder := wv.HallOrders[checkFloor][fsm.B_HallUp]
 	if upOrder.SyncState == Confirmed &&
-		prevState.Requests[floor][fsm.B_HallUp] && !inputStateElevator.Requests[floor][fsm.B_HallUp] {
+		!inputStateElevator.Requests[checkFloor][fsm.B_HallUp] &&
+		(prevState.Requests[checkFloor][fsm.B_HallUp] || upOrder.OwnerID == myID) {
+		fmt.Printf("[WV] DeleteProposed: floor=%d dir=Up (prevReq=%v, owner=%q, myID=%q)\n",
+			checkFloor, prevState.Requests[checkFloor][fsm.B_HallUp], upOrder.OwnerID, myID)
 		upOrder.SyncState = DeleteProposed
-		wv.HallOrders[floor][fsm.B_HallUp] = upOrder
+		wv.HallOrders[checkFloor][fsm.B_HallUp] = upOrder
 	}
 
-	downOrder := wv.HallOrders[floor][fsm.B_HallDown]
+	downOrder := wv.HallOrders[checkFloor][fsm.B_HallDown]
 	if downOrder.SyncState == Confirmed &&
-		prevState.Requests[floor][fsm.B_HallDown] && !inputStateElevator.Requests[floor][fsm.B_HallDown] {
+		!inputStateElevator.Requests[checkFloor][fsm.B_HallDown] &&
+		(prevState.Requests[checkFloor][fsm.B_HallDown] || downOrder.OwnerID == myID) {
+		fmt.Printf("[WV] DeleteProposed: floor=%d dir=Down (prevReq=%v, owner=%q, myID=%q)\n",
+			checkFloor, prevState.Requests[checkFloor][fsm.B_HallDown], downOrder.OwnerID, myID)
 		downOrder.SyncState = DeleteProposed
-		wv.HallOrders[floor][fsm.B_HallDown] = downOrder
+		wv.HallOrders[checkFloor][fsm.B_HallDown] = downOrder
 	}
 
 	return wv

@@ -42,17 +42,19 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 		select {
 
 		case worldview := <-worldviewToFSMCh:
-			// Merge requests: only add if order transitioned from Unconfirmed to Confirmed
 			mergedRequests := mergeRequestsFromWorldviewTransitions(elevatorState.Requests, prevWorldview, worldview)
-			updateRequests(mergedRequests, &elevatorState, elevatorStateCh)
 			prevWorldview = worldview
+			requestsChanged := elevatorState.Requests != mergedRequests
+			elevatorState.Requests = mergedRequests
+
+			fmt.Printf("[FSM] Worldview mottatt. Floor=%d Behaviour=%d Requests=%v\n",
+				elevatorState.Floor, elevatorState.Behaviour, elevatorState.Requests)
 
 			if requests_shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-				fmt.Println("###\nServing current floor immediately after receiving new requests\n###")
+				fmt.Printf("[FSM] Serverer nåværende etasje umiddelbart. Requests etter clear=%v\n", elevatorState.Requests)
 				continue
 			}
-			// Start bevegelse umiddelbart ved nye bestillinger
 			if elevatorCanMove(elevatorState) {
 				db := requests_chooseDirection(elevatorState)
 				if db.ElevatorBehaviour == EB_DoorOpen {
@@ -60,6 +62,8 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 				} else {
 					applyDecision(db, &elevatorState, elevatorStateCh)
 				}
+			} else if requestsChanged {
+				sendState(&elevatorState, elevatorStateCh)
 			}
 
 		case <-doorTimer:
@@ -153,18 +157,23 @@ func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
 func mergeRequestsFromWorldviewTransitions(currentRequests [N_FLOORS][N_BUTTONS]bool, prevWorldview, newWorldview t.Worldview) [N_FLOORS][N_BUTTONS]bool {
 	requests := currentRequests
 
-	// Hall requests: include ALL Confirmed orders (not just transitions)
-	// This ensures FSM stays in sync even if it loses a request locally
+	// Hall requests: include ALL Confirmed orders owned by this elevator
 	for f := 0; f < N_FLOORS; f++ {
 		upOrder := newWorldview.HallOrders[f][B_HallUp]
-		// If order is Confirmed and FSM owns it, include it
 		if upOrder.SyncState == t.Confirmed && upOrder.OwnerID == newWorldview.IdElevator {
+			if !requests[f][B_HallUp] {
+				fmt.Printf("[FSM] Merge: legger til HallUp floor=%d (state=%d owner=%q myID=%q)\n",
+					f, upOrder.SyncState, upOrder.OwnerID, newWorldview.IdElevator)
+			}
 			requests[f][B_HallUp] = true
 		}
 
 		downOrder := newWorldview.HallOrders[f][B_HallDown]
-		// If order is Confirmed and FSM owns it, include it
 		if downOrder.SyncState == t.Confirmed && downOrder.OwnerID == newWorldview.IdElevator {
+			if !requests[f][B_HallDown] {
+				fmt.Printf("[FSM] Merge: legger til HallDown floor=%d (state=%d owner=%q myID=%q)\n",
+					f, downOrder.SyncState, downOrder.OwnerID, newWorldview.IdElevator)
+			}
 			requests[f][B_HallDown] = true
 		}
 	}
@@ -205,6 +214,7 @@ func applyDecision(db DirnBehaviourPair, elevatorState *ElevatorState, elevatorS
 		elevio.SetDoorOpenLamp(false)
 	}
 	elevio.SetMotorDirection(elevio.MotorDirection(db.Dirn))
+	fmt.Printf("[FSM] applyDecision: Dirn=%d Behaviour=%d (floor=%d)\n", db.Dirn, db.ElevatorBehaviour, elevatorState.Floor)
 
 	if elevatorState.Dirn == db.Dirn && elevatorState.Behaviour == db.ElevatorBehaviour {
 		return
@@ -225,7 +235,9 @@ func clearFloorRequests(elevatorState ElevatorState, elevatorStateCh chan Elevat
 func openDoorAndClearCurrentFloor(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time) {
 	elevio.SetMotorDirection(elevio.MD_Stop)
 	elevatorState = requests_clearAtCurrentFloor(elevatorState)
-	updateBehaviourAndRequests(EB_DoorOpen, elevatorState.Requests, &elevatorState, elevatorStateCh)
+	elevatorState.Behaviour = EB_DoorOpen
+	elevio.SetDoorOpenLamp(true)
+	sendState(&elevatorState, elevatorStateCh) // Alltid send - unngår at cleared state forsvinner
 
 	return elevatorState, time.After(3000 * time.Millisecond)
 }
@@ -262,4 +274,3 @@ func sendLatestBool(ch chan bool, v bool) {
 		ch <- v
 	}
 }
-
