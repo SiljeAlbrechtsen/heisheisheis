@@ -86,14 +86,27 @@ func updateWorldviewFromSync(latestWorldviews map[string]Worldview, inputSyncedH
 	worldviewsMap := latestWorldviews
 	worldview := worldviewsMap[myID]
 
-	// Bevar lokalt satt OwnerID når sync ikke endrer SyncState.
-	// Sync bruker potensielt utdatert worldview-data, så OwnerID fra sync
-	// kan være utdatert i forhold til lokal assignment.
+	// Merge sync-resultater med lokal state.
+	// Sync kan jobbe med utdatert data (pga send-latest), så vi må beskytte
+	// lokale endringer som sync ikke har sett ennå.
 	for f := 0; f < NumFloors; f++ {
 		for d := 0; d < Directions; d++ {
-			if inputSyncedHallOrders[f][d].SyncState == worldview.HallOrders[f][d].SyncState &&
-				worldview.HallOrders[f][d].OwnerID != NoOwner {
-				inputSyncedHallOrders[f][d].OwnerID = worldview.HallOrders[f][d].OwnerID
+			localOrder := worldview.HallOrders[f][d]
+			syncOrder := inputSyncedHallOrders[f][d]
+
+			// Ikke la stale sync-resultat overskrive peer-death-tilstand.
+			// Hvis vi lokalt har satt Unconfirmed pga peer-død, og sync
+			// returnerer Confirmed fra gammel data, behold lokal state.
+			if localOrder.OwnerID == PeerDied && localOrder.SyncState == Unconfirmed &&
+				syncOrder.SyncState == Confirmed {
+				inputSyncedHallOrders[f][d] = localOrder
+				continue
+			}
+
+			// Bevar lokalt satt OwnerID når sync ikke endrer SyncState
+			if syncOrder.SyncState == localOrder.SyncState &&
+				localOrder.OwnerID != NoOwner {
+				inputSyncedHallOrders[f][d].OwnerID = localOrder.OwnerID
 			}
 		}
 	}
