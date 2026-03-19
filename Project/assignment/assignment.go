@@ -1,7 +1,7 @@
 package assignment
 
 import (
-	fsm "Project/FSM"
+	elev "Project/elevator"
 	wv "Project/worldview"
 	"bytes"
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 )
 
 type hallRequestsInputJSON struct {
-	HallRequests [wv.NumFloors][wv.Directions]bool `json:"hallRequests"`
+	HallRequests [elev.N_FLOORS][elev.N_DIRECTIONS]bool `json:"hallRequests"`
 	States       map[string]stateInputJSON         `json:"states"`
 }
 
@@ -19,25 +19,25 @@ type stateInputJSON struct {
 	Behaviour   string             `json:"behaviour"`
 	Floor       int                `json:"floor"`
 	Direction   string             `json:"direction"`
-	CabRequests [wv.NumFloors]bool `json:"cabRequests"`
+	CabRequests [elev.N_FLOORS]bool `json:"cabRequests"`
 }
 
-func behaviourToString(b fsm.Behaviour) string {
+func behaviourToString(b elev.Behaviour) string {
 	switch b {
-	case fsm.EB_Moving:
+	case elev.EB_Moving:
 		return "moving"
-	case fsm.EB_DoorOpen:
+	case elev.EB_DoorOpen:
 		return "doorOpen"
 	default:
 		return "idle"
 	}
 }
 
-func directionToString(d fsm.Direction) string {
+func directionToString(d elev.Direction) string {
 	switch d {
-	case fsm.D_Up:
+	case elev.D_Up:
 		return "up"
-	case fsm.D_Down:
+	case elev.D_Down:
 		return "down"
 	default:
 		return "stop"
@@ -53,11 +53,11 @@ func buildState(id string, worldview wv.Worldview) stateInputJSON {
 	}
 }
 
-func convertHallOrdersToBool(hallOrders wv.HallOrders) [wv.NumFloors][wv.Directions]bool {
-	var converted [wv.NumFloors][wv.Directions]bool
+func convertHallOrdersToBool(hallOrders wv.HallOrders) [elev.N_FLOORS][elev.N_DIRECTIONS]bool {
+	var converted [elev.N_FLOORS][elev.N_DIRECTIONS]bool
 
-	for f := 0; f < wv.NumFloors; f++ {
-		for d := 0; d < wv.Directions; d++ {
+	for f := 0; f < elev.N_FLOORS; f++ {
+		for d := 0; d < elev.N_DIRECTIONS; d++ {
 			order := hallOrders[f][d]
 			// Reassign orders som ikke har en levende eier
 			converted[f][d] = order.SyncState == wv.Confirmed &&

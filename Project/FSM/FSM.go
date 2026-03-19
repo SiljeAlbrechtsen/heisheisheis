@@ -5,17 +5,17 @@ import (
 
 	elevio "Project/Driver"
 	hardware "Project/Hardware"
-	t "Project/types"
+	elev "Project/elevator"
 )
 
 const doorOpenDuration = 3000 * time.Millisecond
 const errorTimeout = 3000 * time.Millisecond
 
-func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState, printHallOrdersReqCh chan bool) {
+func RunElevator(requestsCh chan [elev.N_FLOORS][elev.N_BUTTONS]bool, elevatorStateCh chan ElevatorState, printHallOrdersReqCh chan bool) {
 
 	obstruct := false
 
-	elevatorState := InitElevatorState()
+	elevatorState := elev.InitElevatorState()
 	InitElevator(&elevatorState, elevatorStateCh)
 
 	// Periodisk ticker for fallback-bevegelse og etasjeoppdatering
@@ -41,10 +41,17 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 	for {
 		select {
 
-		case worldview := <-worldviewToFSMCh:
-			mergedRequests := mergeRequestsFromWorldview(elevatorState.Requests, worldview)
-			requestsChanged := elevatorState.Requests != mergedRequests
-			elevatorState.Requests = mergedRequests
+		case newRequests := <-requestsCh:
+			merged := elevatorState.Requests
+			for f := range newRequests {
+				for b := range newRequests[f] {
+					if newRequests[f][b] {
+						merged[f][b] = true
+					}
+				}
+			}
+			requestsChanged := elevatorState.Requests != merged
+			elevatorState.Requests = merged
 
 			if shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
@@ -70,7 +77,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 			elevatorState, doorTimer = executeMovementPlan(elevatorState, elevatorStateCh)
 
 		case <-floorTicker.C:
-			if !(obstruct && elevatorState.Behaviour == EB_DoorOpen) && elevio.GetFloor() != -1 {
+			if !(obstruct && elevatorState.Behaviour == elev.EB_DoorOpen) && elevio.GetFloor() != -1 {
 				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
 				resetTimer(errorTimer, errorTimeout)
 			}
@@ -82,7 +89,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 		case floor := <-floorSensorCh:
 			updateFloor(floor, &elevatorState, elevatorStateCh)
 
-			if doorTimer == nil && elevatorState.Behaviour == EB_Moving {
+			if doorTimer == nil && elevatorState.Behaviour == elev.EB_Moving {
 				elevatorState, doorTimer = clearFloorRequests(elevatorState, elevatorStateCh)
 			}
 			if elevatorCanMove(elevatorState) {
@@ -121,37 +128,10 @@ func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
 	sendState(elevator, elevatorStateCh)
 }
 
-// mergeRequestsFromWorldview synkroniserer FSM sine requests med worldview sine bekreftede ordrer.
-// Inkluderer alle Confirmed hall-ordrer denne heisen eier, og alle cab-ordrer.
-func mergeRequestsFromWorldview(currentRequests [N_FLOORS][N_BUTTONS]bool, worldview t.Worldview) [N_FLOORS][N_BUTTONS]bool {
-	requests := currentRequests
-
-	for f := 0; f < N_FLOORS; f++ {
-		upOrder := worldview.HallOrders[f][B_HallUp]
-		if upOrder.SyncState == t.Confirmed && upOrder.OwnerID == worldview.IdElevator {
-			requests[f][B_HallUp] = true
-		}
-		downOrder := worldview.HallOrders[f][B_HallDown]
-		if downOrder.SyncState == t.Confirmed && downOrder.OwnerID == worldview.IdElevator {
-			requests[f][B_HallDown] = true
-		}
-	}
-
-	if worldview.AllCabOrders != nil {
-		for f := 0; f < N_FLOORS; f++ {
-			if worldview.AllCabOrders[worldview.IdElevator][f] {
-				requests[f][B_Cab] = true
-			}
-		}
-	}
-
-	return requests
-}
-
 // executeMovementPlan velger retning og utfører enten døråpning eller bevegelse.
 func executeMovementPlan(e ElevatorState, ch chan ElevatorState) (ElevatorState, <-chan time.Time) {
 	db := chooseDirection(e)
-	if db.ElevatorBehaviour == EB_DoorOpen {
+	if db.ElevatorBehaviour == elev.EB_DoorOpen {
 		return openDoorAndClearCurrentFloor(e, ch)
 	}
 	applyDecision(db, &e, ch)
@@ -160,12 +140,12 @@ func executeMovementPlan(e ElevatorState, ch chan ElevatorState) (ElevatorState,
 
 func applyDecision(db DirnBehaviourPair, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
 	// Forhindre at heisen kjører ut over første eller siste etasje
-	if (elevatorState.Floor == 0 && db.ElevatorBehaviour == EB_Moving && db.Dirn == D_Down) ||
-		(elevatorState.Floor == N_FLOORS-1 && db.ElevatorBehaviour == EB_Moving && db.Dirn == D_Up) {
-		db = DirnBehaviourPair{Dirn: D_Stop, ElevatorBehaviour: EB_Idle}
+	if (elevatorState.Floor == 0 && db.ElevatorBehaviour == elev.EB_Moving && db.Dirn == elev.D_Down) ||
+		(elevatorState.Floor == elev.N_FLOORS-1 && db.ElevatorBehaviour == elev.EB_Moving && db.Dirn == elev.D_Up) {
+		db = DirnBehaviourPair{Dirn: elev.D_Stop, ElevatorBehaviour: elev.EB_Idle}
 	}
 
-	elevio.SetDoorOpenLamp(db.ElevatorBehaviour == EB_DoorOpen)
+	elevio.SetDoorOpenLamp(db.ElevatorBehaviour == elev.EB_DoorOpen)
 	elevio.SetMotorDirection(elevio.MotorDirection(db.Dirn))
 
 	if elevatorState.Dirn == db.Dirn && elevatorState.Behaviour == db.ElevatorBehaviour {
@@ -188,7 +168,7 @@ func clearFloorRequests(elevatorState ElevatorState, elevatorStateCh chan Elevat
 func openDoorAndClearCurrentFloor(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time) {
 	elevio.SetMotorDirection(elevio.MD_Stop)
 	elevatorState = clearAtCurrentFloor(elevatorState)
-	elevatorState.Behaviour = EB_DoorOpen
+	elevatorState.Behaviour = elev.EB_DoorOpen
 	elevio.SetDoorOpenLamp(true)
 	sendState(&elevatorState, elevatorStateCh)
 
@@ -196,7 +176,7 @@ func openDoorAndClearCurrentFloor(elevatorState ElevatorState, elevatorStateCh c
 }
 
 func elevatorCanMove(e ElevatorState) bool {
-	return e.Behaviour != EB_DoorOpen && !e.Error && hasAnyRequests(e) && elevio.GetFloor() != -1
+	return e.Behaviour != elev.EB_DoorOpen && !e.Error && hasAnyRequests(e) && elevio.GetFloor() != -1
 }
 
 func resetTimer(t *time.Timer, d time.Duration) {

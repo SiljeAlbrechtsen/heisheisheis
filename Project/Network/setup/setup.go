@@ -42,11 +42,14 @@ func ResolveElevatorAddr() string {
 func TransmitWorldviewPeriodically(worldviewTx chan<- wv.Worldview, worldviewToNetworkCh <-chan wv.Worldview) {
 	currentMsg := <-worldviewToNetworkCh
 
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case newMsg := <-worldviewToNetworkCh:
 			currentMsg = newMsg
-		case <-time.After(100 * time.Millisecond):
+		case <-ticker.C:
 			worldviewTx <- currentMsg
 		}
 	}

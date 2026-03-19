@@ -7,11 +7,22 @@ import (
 	"Project/Network/setup"
 	assign "Project/assignment"
 	sync "Project/synchronization"
+	elev "Project/elevator"
 	wv "Project/worldview"
 
 	"fmt"
 )
 
+// Architecture: peer-to-peer distributed elevator control.
+//
+// Worldview is the state hub — all modules communicate through it.
+// A hall order follows this path before the FSM serves it:
+//
+//   Button → Worldview → Sync (4-stage consensus) → Worldview
+//                      → Assigner (cost-based assignment) → Worldview → FSM
+//
+// Sync cycle: None → Unconfirmed → Confirmed → DeleteProposed → None.
+// FSM only serves orders where state is Confirmed and OwnerID == own ID.
 func main() {
 	addr := setup.ResolveElevatorAddr()
 	elevio.Init(addr, 4)
@@ -35,7 +46,7 @@ func main() {
 	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 1)
 	worldviewToSyncCh := make(chan map[string]wv.Worldview, 1)
 	worldviewToNetworkCh := make(chan wv.Worldview, 1)
-	worldviewToFSMCh := make(chan wv.Worldview, 16)
+	worldviewToFSMCh := make(chan [elev.N_FLOORS][elev.N_BUTTONS]bool, 16)
 
 	newPeerIdCh, lostPeerIdCh := setup.StartPeerDiscovery(id)
 

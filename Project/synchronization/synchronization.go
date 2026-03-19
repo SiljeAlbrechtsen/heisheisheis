@@ -1,6 +1,7 @@
 package synchronization
 
 import (
+	elev "Project/elevator"
 	wv "Project/worldview"
 )
 
@@ -72,8 +73,8 @@ func syncHallOrders(
 		if peer.Dead {
 			continue
 		}
-		for f := 0; f < wv.NumFloors; f++ {
-			for d := 0; d < wv.Directions; d++ {
+		for f := 0; f < elev.N_FLOORS; f++ {
+			for d := 0; d < elev.N_DIRECTIONS; d++ {
 				peerOrder := peer.HallOrders[f][d]
 				if peerOrder.SyncState == wv.Unconfirmed &&
 					peerOrder.OwnerID == wv.PeerDied &&
@@ -91,8 +92,8 @@ func syncHallOrders(
 		if peer.Dead || peer.IdElevator == myID {
 			continue
 		}
-		for f := 0; f < wv.NumFloors; f++ {
-			for d := 0; d < wv.Directions; d++ {
+		for f := 0; f < elev.N_FLOORS; f++ {
+			for d := 0; d < elev.N_DIRECTIONS; d++ {
 				myCurrentOrder := myHallOrders[f][d]
 				peerCurrentOrder := peer.HallOrders[f][d]
 
@@ -109,8 +110,8 @@ func syncHallOrders(
 	}
 
 	// Steg 2: Konsensussjekk — avanser state hvis alle er enige
-	for f := 0; f < wv.NumFloors; f++ {
-		for d := 0; d < wv.Directions; d++ {
+	for f := 0; f < elev.N_FLOORS; f++ {
+		for d := 0; d < elev.N_DIRECTIONS; d++ {
 			myOrder := myHallOrders[f][d]
 
 			switch myOrder.SyncState {
@@ -140,8 +141,8 @@ func syncHallOrders(
 	// Steg 3: OwnerID-konflikt — hvis to alive peers er uenige om hvem som eier en Confirmed ordre,
 	// velg deterministisk vinner med minste OwnerID.
 	// Begge heiser konvergerer uavhengig til samme eier etter én sync-runde.
-	for f := 0; f < wv.NumFloors; f++ {
-		for d := 0; d < wv.Directions; d++ {
+	for f := 0; f < elev.N_FLOORS; f++ {
+		for d := 0; d < elev.N_DIRECTIONS; d++ {
 			myOrder := myHallOrders[f][d]
 			if myOrder.SyncState != wv.Confirmed || myOrder.OwnerID == wv.NoOwner || myOrder.OwnerID == wv.PeerDied {
 				continue
@@ -165,8 +166,8 @@ func syncHallOrders(
 	}
 
 	// Steg 4: Normaliser — None-ordrer skal aldri ha owner
-	for f := 0; f < wv.NumFloors; f++ {
-		for d := 0; d < wv.Directions; d++ {
+	for f := 0; f < elev.N_FLOORS; f++ {
+		for d := 0; d < elev.N_DIRECTIONS; d++ {
 			if myHallOrders[f][d].SyncState == wv.None {
 				myHallOrders[f][d].OwnerID = wv.NoOwner
 			}
