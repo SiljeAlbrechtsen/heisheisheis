@@ -19,6 +19,10 @@ import (
 // TODO: må vi ha strl på input-variabler?
 // TODO: Sjekke feil der fsm ikke ser sine egne hallorders
 // TODO: Sjekke init til driveren, mye spaghetti der nå
+// Todo: Cabcall fra en etasjen sommheisen akkurat har forlatt tar 2 trykk å få inn
+// TODO: error timeout
+// TODO: bug med at ikke alle ser en død heis -Lav prioritet
+// TODO: fikse tid til error state
 
 func main() {
 	addr := t.ResolveElevatorAddr()
