@@ -110,6 +110,14 @@ func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
 		return true
 	}
 
+	// PeerDied-degradering: Confirmed → Unconfirmed/peerDied er tillatt
+	// (eieren av ordren gikk i error, sync propagerer dette via Steg 0)
+	if localOrder.SyncState == Confirmed &&
+		syncOrder.SyncState == Unconfirmed &&
+		syncOrder.OwnerID == PeerDied {
+		return true
+	}
+
 	// Alt annet er stale — behold lokal tilstand
 	return false
 }
@@ -129,9 +137,10 @@ func updateWorldviewFromSync(latestWorldviews map[string]Worldview, inputSyncedH
 				continue
 			}
 
-			// Bevar lokalt satt OwnerID når sync ikke endrer SyncState
+			// Bevar lokalt satt OwnerID når sync ikke endrer SyncState (aldri for None-ordrer)
 			if syncOrder.SyncState == localOrder.SyncState &&
-				localOrder.OwnerID != NoOwner {
+				localOrder.OwnerID != NoOwner &&
+				localOrder.SyncState != None {
 				inputSyncedHallOrders[f][d].OwnerID = localOrder.OwnerID
 			}
 		}
