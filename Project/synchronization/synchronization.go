@@ -145,6 +145,12 @@ func syncHallOrders(
 			switch myOrder.SyncState {
 
 			case wv.Unconfirmed:
+				// Krev at vi allerede har broadcast Unconfirmed-state før vi tillater konsensus.
+				// Hindrer at Confirmed→Unconfirmed-degradering (peerDied via Steg 0) hopper
+				// direkte til Confirmed i samme runde uten å ha fortalt andre om det.
+				if latestWorldviews[myID].HallOrders[f][d].SyncState != wv.Unconfirmed {
+					break
+				}
 				allAgree := true
 				for _, peer := range latestWorldviews {
 					if peer.Dead {
