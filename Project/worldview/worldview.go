@@ -365,6 +365,8 @@ func GoroutineForWorldview(
 	myWorldview = worldviewInit(myID, myWorldview, networkToInitCh)
 	worldviewsMap[myID] = myWorldview
 
+	hasNetwork := true
+
 	copyMap := func(m map[string]Worldview) map[string]Worldview {
 		c := make(map[string]Worldview, len(m))
 		for k, v := range m {
@@ -490,23 +492,40 @@ func GoroutineForWorldview(
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestToSync(copyMap(worldviewsMap))
 
-		case newPeer := <-newPeerIdCh:
-			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeer)
+		case newPeerIdCh := <-newPeerIdCh:
+			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeerIdCh)
+			if newPeerIdCh == myID {
+				hasNetwork = true
+			}
+			if newPeerIdCh == myID {
+				for id, wv := range worldviewsMap {
+					if id != myID {
+						fmt.Printf("[Worldview] Kopierer hallOrders fra peer %s\n", id)
+						myWorldview.HallOrders = wv.HallOrders
+						break
+					}
+				}
+			}
 
-		case inputDeadPeer := <-lostPeerIdCh:
+		case inputDeadPeerId := <-lostPeerIdCh:
 			//fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeer)
-			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
+			if inputDeadPeerId == myID {
+				hasNetwork = false
+			}
+			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeerId)
 			myWorldview = worldviewsMap[myID]
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestToSync(copyMap(worldviewsMap))
 
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = worldviewsMap[myID]
-			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
-			worldviewsMap[myID] = myWorldview
-			sendLatestLights()
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+			if hasNetwork {
+				myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
+				worldviewsMap[myID] = myWorldview
+				sendLatestLights()
+				sendLatestToNetwork(copyMap(worldviewsMap)[myID])
+				sendLatestToSync(copyMap(worldviewsMap))
+			}
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = worldviewsMap[myID]
