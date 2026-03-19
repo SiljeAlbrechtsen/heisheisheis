@@ -41,12 +41,7 @@ type ElevatorState struct {
 	Behaviour Behaviour
 	Requests  [N_FLOORS][N_BUTTONS]bool
 	Error     bool
-	config    struct {
-		doorOpenDurationS float64
-	}
 }
-
-type HallRequestsMatrix [N_FLOORS][N_BUTTONS]bool
 
 type OrderSyncState int
 
@@ -80,9 +75,6 @@ func InitElevatorState() ElevatorState {
 		Dirn:      D_Stop,
 		Behaviour: EB_Idle,
 		Error:     false,
-		config: struct {
-			doorOpenDurationS float64
-		}{doorOpenDurationS: 3.0},
 	}
 }
 

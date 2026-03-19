@@ -53,12 +53,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 				continue
 			}
 			if elevatorCanMove(elevatorState) {
-				db := requests_chooseDirection(elevatorState)
-				if db.ElevatorBehaviour == EB_DoorOpen {
-					elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-				} else {
-					applyDecision(db, &elevatorState, elevatorStateCh)
-				}
+				elevatorState, doorTimer = executeMovementPlan(elevatorState, elevatorStateCh)
 			} else if requestsChanged {
 				sendState(&elevatorState, elevatorStateCh)
 			}
@@ -74,12 +69,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 				continue
 			}
-			db := requests_chooseDirection(elevatorState)
-			if db.ElevatorBehaviour == EB_DoorOpen {
-				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-			} else {
-				applyDecision(db, &elevatorState, elevatorStateCh)
-			}
+			elevatorState, doorTimer = executeMovementPlan(elevatorState, elevatorStateCh)
 
 		case <-floorTicker.C:
 			if !(obstruct && elevatorState.Behaviour == EB_DoorOpen) && elevio.GetFloor() != -1 {
@@ -88,12 +78,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 			}
 			// Fallback: start bevegelse hvis heisen har bestillinger men ikke beveger seg
 			if elevatorCanMove(elevatorState) {
-				db := requests_chooseDirection(elevatorState)
-				if db.ElevatorBehaviour == EB_DoorOpen {
-					elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-				} else {
-					applyDecision(db, &elevatorState, elevatorStateCh)
-				}
+				elevatorState, doorTimer = executeMovementPlan(elevatorState, elevatorStateCh)
 			}
 
 		case floor := <-floorSensorCh:
@@ -103,12 +88,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 				elevatorState, doorTimer = clearFloorRequests(elevatorState, elevatorStateCh)
 			}
 			if elevatorCanMove(elevatorState) {
-				db := requests_chooseDirection(elevatorState)
-				if db.ElevatorBehaviour == EB_DoorOpen {
-					elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-				} else {
-					applyDecision(db, &elevatorState, elevatorStateCh)
-				}
+				elevatorState, doorTimer = executeMovementPlan(elevatorState, elevatorStateCh)
 			}
 
 		case <-stopBtnCh:
@@ -171,6 +151,16 @@ func mergeRequestsFromWorldviewTransitions(currentRequests [N_FLOORS][N_BUTTONS]
 	}
 
 	return requests
+}
+
+// executeMovementPlan velger retning og utfører enten døråpning eller bevegelse.
+func executeMovementPlan(e ElevatorState, ch chan ElevatorState) (ElevatorState, <-chan time.Time) {
+	db := requests_chooseDirection(e)
+	if db.ElevatorBehaviour == EB_DoorOpen {
+		return openDoorAndClearCurrentFloor(e, ch)
+	}
+	applyDecision(db, &e, ch)
+	return e, nil
 }
 
 func applyDecision(db DirnBehaviourPair, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {

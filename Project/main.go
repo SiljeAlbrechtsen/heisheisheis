@@ -45,7 +45,7 @@ func main() {
 	go hardware.ButtonLightsListener(lightsCh)
 	go hardware.ButtonsListener(cabBtnCh, hallBtnCh)
 	go setup.TransmitWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
-	go sync.GoRoutineSync(id, syncToWorldviewCh, worldviewToSyncCh)
+	go sync.GoroutineSync(id, syncToWorldviewCh, worldviewToSyncCh)
 	go wv.GoroutineForWorldview(id, elevatorToWorldviewCh, syncToWorldviewCh, networkToWorldviewCh, networkToInitCh, lostPeerIdCh, newPeerIdCh, cabBtnCh, hallBtnCh, lightsCh, printHallOrdersReqCh, assignerToWorldviewCh, worldviewToAssignerCh, worldviewToSyncCh, worldviewToNetworkCh, worldviewToFSMCh)
 	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToWorldviewCh)
 	go fsm.RunElevator(worldviewToFSMCh, elevatorToWorldviewCh, printHallOrdersReqCh)

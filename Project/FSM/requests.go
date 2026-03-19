@@ -56,7 +56,6 @@ func requests_here(e ElevatorState) bool {
 	return false
 }
 
-// requests_chooseDirection (exact C logic)
 func requests_chooseDirection(e ElevatorState) DirnBehaviourPair {
 	if e.Error {
 		return DirnBehaviourPair{D_Stop, EB_DoorOpen}
@@ -95,43 +94,6 @@ func requests_chooseDirection(e ElevatorState) DirnBehaviourPair {
 	default:
 		return DirnBehaviourPair{D_Stop, EB_Idle}
 	}
-}
-
-// requests_shouldStop (exact C logic)
-func requests_shouldStop(e ElevatorState) bool {
-	if e.Floor < 0 || e.Floor >= N_FLOORS {
-		return true
-	}
-
-	if e.Behaviour == EB_DoorOpen {
-		return true
-	} //A-TO DO: Sjekk om denne er kanskje unødvendig
-
-	switch e.Dirn {
-	case D_Down:
-		return e.Requests[e.Floor][B_HallDown] ||
-			e.Requests[e.Floor][B_Cab] ||
-			!requests_below(e) //A-Sjekker om det er bestilling i cab, hall, eller under oss
-
-	case D_Up:
-		return e.Requests[e.Floor][B_HallUp] ||
-			e.Requests[e.Floor][B_Cab] ||
-			!requests_above(e) //A-Sjekker om det er bestilling i cab, hall, eller over oss
-
-	case D_Stop:
-		fallthrough
-	default:
-		return true //Defaul så stopper heisen
-	}
-}
-
-// requests_shouldClearImmediately (exact C logic)
-func requests_shouldClearImmediately(e ElevatorState, btnFloor int, btnType Button) bool {
-	return e.Floor == btnFloor &&
-		((e.Dirn == D_Up && btnType == B_HallUp) ||
-			(e.Dirn == D_Down && btnType == B_HallDown) ||
-			e.Dirn == D_Stop ||
-			btnType == B_Cab)
 }
 
 func requests_shouldServeCurrentFloor(e ElevatorState) bool {

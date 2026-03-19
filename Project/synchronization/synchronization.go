@@ -153,7 +153,7 @@ func syncHallOrders(
 	return myHallOrders
 }
 
-func GoRoutineSync(
+func GoroutineSync(
 	myID string,
 	syncToWorldviewCh chan wv.HallOrders,
 	worldviewToSyncCh <-chan map[string]wv.Worldview,

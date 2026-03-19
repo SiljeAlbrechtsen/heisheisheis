@@ -37,7 +37,6 @@ type Worldview = t.Worldview
 func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Worldview) Worldview {
 	myWv := myWorldview
 	timeout := time.After(1 * time.Second)
-	//fmt.Println("hei")
 	for {
 		select {
 		// Hvis den får andre worldvies
@@ -143,9 +142,6 @@ func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, input
 
 	return worldviewsMap
 }
-
-// TODO
-// funksjon som legger inn caborders/hallorders inn i din egen worldview. evt samle de sånn at vi kan bruke samme funksjon for de
 
 // markPeerDeadInHallOrders degraderer Confirmed-ordrer eid av lostId til Unconfirmed/PeerDied,
 // slik at andre heiser kan ta over ordren.
@@ -286,13 +282,13 @@ func GoroutineForWorldview(
 	cabBtnCh <-chan int,
 	hallBtnCh <-chan [2]int,
 	lightsCh chan Worldview,
-	printHallOrdersReqCh <-chan bool, //ToDO Fjern etter testing
+	printHallOrdersReqCh <-chan bool,
 
 	assignerToWorldviewCh <-chan map[string][4][3]bool,
 	worldviewToAssignerCh chan map[string]Worldview,
 	worldviewToSyncCh chan map[string]Worldview,
 	worldviewToNetworkCh chan Worldview,
-	worldviewToFSMCh chan Worldview, //TODO
+	worldviewToFSMCh chan Worldview,
 ) {
 
 	worldviewsMap := make(map[string]Worldview)
@@ -444,11 +440,10 @@ func GoroutineForWorldview(
 			}
 
 		case inputDeadPeerId := <-lostPeerIdCh:
-			//fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeer)
 			if inputDeadPeerId == myID {
 				hasNetwork = false
 			}
-			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeerId)
+			worldviewsMap = handleLostPeer(worldviewsMap, myID, inputDeadPeerId)
 			myWorldview = worldviewsMap[myID]
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestToSync(copyMap(worldviewsMap))
@@ -487,8 +482,8 @@ func GoroutineForWorldview(
 	}
 }
 
-// HandleLostPeer markerer tapt peer som død og degraderer dens ordrer til Unconfirmed/PeerDied.
-func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
+// handleLostPeer markerer tapt peer som død og degraderer dens ordrer til Unconfirmed/PeerDied.
+func handleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
 	if lostID == myID {
 		return latestWorldviews
 	}

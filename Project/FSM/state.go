@@ -48,21 +48,12 @@ func updateFloor(floor int, elevatorState *ElevatorState, elevatorStateCh chan E
 		return
 	}
 
-	if floor == 0 && elevatorState.Dirn == D_Down || floor == N_FLOORS-1 && elevatorState.Dirn == D_Up {
+	if (floor == 0 && elevatorState.Dirn == D_Down) || (floor == N_FLOORS-1 && elevatorState.Dirn == D_Up) {
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		elevatorState.Dirn = D_Stop
 	}
 
 	elevatorState.Floor = floor
-	sendState(elevatorState, elevatorStateCh)
-}
-
-func updateBehaviour(behaviour Behaviour, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	if elevatorState.Behaviour == behaviour {
-		return
-	}
-	elevio.SetDoorOpenLamp(behaviour == EB_DoorOpen)
-	elevatorState.Behaviour = behaviour
 	sendState(elevatorState, elevatorStateCh)
 }
 
