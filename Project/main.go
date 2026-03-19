@@ -8,8 +8,7 @@ import (
 	assign "Project/assignment"
 	sync "Project/synchronization"
 	wv "Project/worldview"
-
-	"fmt"
+	"fmt" 
 )
 
 func main() {
