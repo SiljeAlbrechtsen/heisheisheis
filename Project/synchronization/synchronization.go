@@ -128,10 +128,10 @@ func syncHallOrders(
 					//	peer.IdElevator, f, dirName(d),
 					//	syncStateName(myCurrentOrder.SyncState),
 					//	syncStateName(peerCurrentOrder.SyncState))
-					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
+					myHallOrders[f][d] = peerCurrentOrder
 				}
 				if SecondToNextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
-					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
+					myHallOrders[f][d] = peerCurrentOrder
 				}
 			}
 		}
@@ -200,6 +200,28 @@ func syncHallOrders(
 		for d := 0; d < wv.Directions; d++ {
 			if myHallOrders[f][d].SyncState == wv.None {
 				myHallOrders[f][d].OwnerID = wv.NoOwner
+			}
+		}
+	}
+
+	// Steg 4: Robusthet ved peer-død — Confirmed-ordrer skal aldri peke på død/error-eier.
+	for f := 0; f < wv.NumFloors; f++ {
+		for d := 0; d < wv.Directions; d++ {
+			order := myHallOrders[f][d]
+			if order.SyncState != wv.Confirmed {
+				continue
+			}
+			if order.OwnerID == wv.PeerDied {
+				order.OwnerID = wv.NoOwner
+				myHallOrders[f][d] = order
+				continue
+			}
+			if order.OwnerID == wv.NoOwner {
+				continue
+			}
+			if ownerWv, ok := latestWorldviews[order.OwnerID]; !ok || ownerWv.Dead || ownerWv.ErrorState {
+				order.OwnerID = wv.NoOwner
+				myHallOrders[f][d] = order
 			}
 		}
 	}
