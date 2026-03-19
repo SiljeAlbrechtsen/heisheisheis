@@ -95,38 +95,35 @@ func worldviewInit(myID string, myWorldview Worldview, initCh <-chan Worldview) 
 
 // shouldAcceptSyncOrder avgjør om sync-resultatet er gyldig fremgang
 // og ikke et stale resultat som ville regresse lokal tilstand.
+// shouldAcceptSyncOrder avgjør om sync-resultatet representerer gyldig fremgang.
+// Syklusen er: None(0) → Unconfirmed(1) → Confirmed(2) → DeleteProposed(3) → None(0)
 func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
-	// Peer-death: ikke la stale Confirmed overskrive Unconfirmed fra peer-death,
-	// men aksepter legitim konsensus (OwnerID="" betyr at sync faktisk avanserte)
-	if localOrder.OwnerID == PeerDied && localOrder.SyncState == Unconfirmed &&
-		syncOrder.SyncState == Confirmed && syncOrder.OwnerID != NoOwner {
-		return false
-	}
-
-	// Samme state: alltid OK
 	if syncOrder.SyncState == localOrder.SyncState {
 		return true
 	}
 
-	// Fremover i syklusen: sync >= local (numerisk)
+	// Fremover i syklusen (numerisk)
+	// Unntak: ikke re-bekreft en ordre vi allerede har markert som PeerDied
 	if syncOrder.SyncState > localOrder.SyncState {
-		return true
+		staleConfirm := localOrder.SyncState == Unconfirmed &&
+			localOrder.OwnerID == PeerDied &&
+			syncOrder.SyncState == Confirmed &&
+			syncOrder.OwnerID != NoOwner
+		return !staleConfirm
 	}
 
-	// Syklus-fullføring: DeleteProposed → None (konsensus)
+	// Syklusfullføring: DeleteProposed → None
 	if localOrder.SyncState == DeleteProposed && syncOrder.SyncState == None {
 		return true
 	}
 
-	// PeerDied-degradering: Confirmed → Unconfirmed/peerDied er tillatt
-	// (eieren av ordren gikk i error, sync propagerer dette via Steg 0)
+	// PeerDied-degradering: Confirmed → Unconfirmed/PeerDied
 	if localOrder.SyncState == Confirmed &&
 		syncOrder.SyncState == Unconfirmed &&
 		syncOrder.OwnerID == PeerDied {
 		return true
 	}
 
-	// Alt annet er stale — behold lokal tilstand
 	return false
 }
 
