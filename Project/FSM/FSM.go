@@ -38,6 +38,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 	go elevio.PollObstructionSwitch(obstructCh)
 	go hardware.ErrorLight(errorLightCh)
 
+	
 	for {
 		select {
 
