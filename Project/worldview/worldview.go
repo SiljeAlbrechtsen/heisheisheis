@@ -31,13 +31,11 @@ type Order = t.Order
 
 type HallOrders = t.HallOrders
 
-// Worldview is now imported from types
 type Worldview = t.Worldview
 
 func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Worldview) Worldview {
 	myWv := myWorldview
 	timeout := time.After(1 * time.Second)
-	//fmt.Println("hei")
 	for {
 		select {
 		// Hvis den får andre worldvies
@@ -64,10 +62,6 @@ func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Wo
 	}
 
 }
-
-// _____________________________________________________________________________
-// ----------FUNKSJONER FOR Å TA IMOT OG HÅNDTERE DATA FRA ANDRE MODULER--------
-// _____________________________________________________________________________
 
 // shouldAcceptSyncOrder avgjør om sync-resultatet er gyldig fremgang
 // og ikke et stale resultat som ville regresse lokal tilstand.
@@ -144,21 +138,18 @@ func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, input
 	return worldviewsMap
 }
 
-// TODO
-// funksjon som legger inn caborders/hallorders inn i din egen worldview. evt samle de sånn at vi kan bruke samme funksjon for de
-
 // markPeerDeadInHallOrders degraderer Confirmed-ordrer eid av lostId til Unconfirmed/PeerDied,
 // slik at andre heiser kan ta over ordren.
 func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	ho := hallOrders
-	for i, row := range ho {
-		for j := range row {
-			order := ho[i][j]
+	for floor := range ho {
+		for dir := range ho[floor] {
+			order := ho[floor][dir]
 			if order.OwnerID == lostId && order.SyncState == Confirmed {
 				order.SyncState = Unconfirmed
 				order.OwnerID = PeerDied
 			}
-			ho[i][j] = order
+			ho[floor][dir] = order
 		}
 	}
 	return ho
@@ -167,20 +158,20 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 // updateWorldviewWithElevatorState oppdaterer worldview med ny elevatortilstand fra FSM,
 // inkludert serverte cab-ordrer og fullførte hall-ordrer (setter DeleteProposed).
 func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.ElevatorState, myID string) Worldview {
-	wv := worldview
-	prevState := wv.State
-	wv.State = inputStateElevator
+	updatedWorldview := worldview
+	prevState := updatedWorldview.State
+	updatedWorldview.State = inputStateElevator
 	floor := inputStateElevator.Floor
 
 	if floor < 0 || floor >= NumFloors {
-		return wv
+		return updatedWorldview
 	}
 
-	if wv.AllCabOrders != nil {
-		orders := wv.AllCabOrders[myID]
+	if updatedWorldview.AllCabOrders != nil {
+		orders := updatedWorldview.AllCabOrders[myID]
 		if orders[floor] {
 			orders[floor] = false
-			wv.AllCabOrders[myID] = orders
+			updatedWorldview.AllCabOrders[myID] = orders
 		}
 	}
 
@@ -195,26 +186,26 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 	}
 
 	if checkFloor < 0 || checkFloor >= NumFloors {
-		return wv
+		return updatedWorldview
 	}
 
-	upOrder := wv.HallOrders[checkFloor][fsm.B_HallUp]
+	upOrder := updatedWorldview.HallOrders[checkFloor][fsm.B_HallUp]
 	if upOrder.SyncState == Confirmed &&
 		!inputStateElevator.Requests[checkFloor][fsm.B_HallUp] &&
 		(prevState.Requests[checkFloor][fsm.B_HallUp] || upOrder.OwnerID == myID) {
 		upOrder.SyncState = DeleteProposed
-		wv.HallOrders[checkFloor][fsm.B_HallUp] = upOrder
+		updatedWorldview.HallOrders[checkFloor][fsm.B_HallUp] = upOrder
 	}
 
-	downOrder := wv.HallOrders[checkFloor][fsm.B_HallDown]
+	downOrder := updatedWorldview.HallOrders[checkFloor][fsm.B_HallDown]
 	if downOrder.SyncState == Confirmed &&
 		!inputStateElevator.Requests[checkFloor][fsm.B_HallDown] &&
 		(prevState.Requests[checkFloor][fsm.B_HallDown] || downOrder.OwnerID == myID) {
 		downOrder.SyncState = DeleteProposed
-		wv.HallOrders[checkFloor][fsm.B_HallDown] = downOrder
+		updatedWorldview.HallOrders[checkFloor][fsm.B_HallDown] = downOrder
 	}
 
-	return wv
+	return updatedWorldview
 }
 
 // updateOwnerIDsFromAssignment oppdaterer OwnerID på bekreftede hall-ordrer basert på assigner-resultatet.
@@ -492,47 +483,46 @@ func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID s
 	if lostID == myID {
 		return latestWorldviews
 	}
-	lwv := latestWorldviews
-	lostWorldview := lwv[lostID]
+	worldviewsMap := latestWorldviews
+	lostWorldview := worldviewsMap[lostID]
 	lostWorldview.Dead = true
-	lwv[lostID] = lostWorldview
+	worldviewsMap[lostID] = lostWorldview
 
-	wv := lwv[myID]
-	wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, lostID)
+	myWorldview := worldviewsMap[myID]
+	myWorldview.HallOrders = markPeerDeadInHallOrders(myWorldview.HallOrders, lostID)
+	worldviewsMap[myID] = myWorldview
 
-	lwv[myID] = wv
-
-	return lwv
+	return worldviewsMap
 }
 
-func addNewCabOrder(worldview Worldview, inputCabBtn int, myID string) Worldview {
+func addCabOrder(worldview Worldview, inputCabBtn int, myID string) Worldview {
 	if inputCabBtn < 0 || inputCabBtn >= NumFloors {
 		return worldview
 	}
-	wv := worldview
+	updatedWorldview := worldview
 
-	cabOrders := wv.AllCabOrders[myID]
+	cabOrders := updatedWorldview.AllCabOrders[myID]
 	cabOrders[inputCabBtn] = true
-	wv.AllCabOrders[myID] = cabOrders
+	updatedWorldview.AllCabOrders[myID] = cabOrders
 
-	return wv
+	return updatedWorldview
 }
 
-func addNewHallOrder(worldview Worldview, inputHallBtn [2]int) Worldview {
+func addHallOrder(worldview Worldview, inputHallBtn [2]int) Worldview {
 	floor := inputHallBtn[0]
 	dir := inputHallBtn[1]
 	if floor < 0 || floor >= NumFloors || dir < 0 || dir >= Directions {
 		return worldview
 	}
-	wv := worldview
+	updatedWorldview := worldview
 
-	order := wv.HallOrders[floor][dir]
+	order := updatedWorldview.HallOrders[floor][dir]
 
 	if order.SyncState == None {
 		order.SyncState = Unconfirmed
 		order.OwnerID = NoOwner
 	}
-	wv.HallOrders[floor][dir] = order
+	updatedWorldview.HallOrders[floor][dir] = order
 
-	return wv
+	return updatedWorldview
 }
