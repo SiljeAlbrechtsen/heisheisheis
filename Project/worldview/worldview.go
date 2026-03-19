@@ -28,17 +28,53 @@ const (
 )
 
 type Order = t.Order
-
 type HallOrders = t.HallOrders
-
 type Worldview = t.Worldview
 
-func worldviewInit(myID string, myWorldview Worldview, networkToInitCh <-chan Worldview) Worldview {
+// WorldviewChannels grupperer alle kanaler inn og ut av worldview-goroutinen.
+type WorldviewChannels struct {
+	// Worldview leser fra disse
+	ElevatorState  <-chan t.ElevatorState
+	SyncHallOrders <-chan HallOrders
+	PeerWorldview  <-chan Worldview
+	InitWorldview  <-chan Worldview
+	LostPeer       <-chan string
+	NewPeer        <-chan string
+	CabBtn         <-chan int
+	HallBtn        <-chan [2]int
+	Assignment     <-chan map[string][4][3]bool
+	PrintDebug     <-chan bool
+
+	// Worldview skriver til disse
+	Lights     chan Worldview
+	ToAssigner chan map[string]Worldview
+	ToSync     chan map[string]Worldview
+	ToNetwork  chan Worldview
+	ToFSM      chan Worldview
+}
+
+// copyWorldviews lager en dyp kopi av worldviews-mapet (inkl. AllCabOrders).
+func copyWorldviews(m map[string]Worldview) map[string]Worldview {
+	c := make(map[string]Worldview, len(m))
+	for k, v := range m {
+		if v.AllCabOrders != nil {
+			newAllCabOrders := make(map[string][NumFloors]bool, len(v.AllCabOrders))
+			for id, orders := range v.AllCabOrders {
+				newAllCabOrders[id] = orders
+			}
+			v.AllCabOrders = newAllCabOrders
+		}
+		c[k] = v
+	}
+	return c
+}
+
+func worldviewInit(myID string, myWorldview Worldview, initCh <-chan Worldview) Worldview {
 	myWv := myWorldview
 	timeout := time.After(1 * time.Second)
 	for {
 		select {
-		case incomingWv := <-networkToInitCh:
+		case incomingWv := <-initCh:
 			if incomingWv.IdElevator == myID {
 				continue
 			}
@@ -97,18 +133,17 @@ func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
 	return false
 }
 
-func updateWorldviewFromSync(latestWorldviews map[string]Worldview, inputSyncedHallOrders HallOrders, myID string) map[string]Worldview {
-	worldviewsMap := latestWorldviews
-	worldview := worldviewsMap[myID]
+func updateWorldviewFromSync(worldviews map[string]Worldview, syncedHallOrders HallOrders, myID string) map[string]Worldview {
+	wv := worldviews[myID]
 
 	for f := 0; f < NumFloors; f++ {
 		for d := 0; d < Directions; d++ {
-			localOrder := worldview.HallOrders[f][d]
-			syncOrder := inputSyncedHallOrders[f][d]
+			localOrder := wv.HallOrders[f][d]
+			syncOrder := syncedHallOrders[f][d]
 
 			if !shouldAcceptSyncOrder(localOrder, syncOrder) {
 				// Stale sync-resultat — behold lokal tilstand
-				inputSyncedHallOrders[f][d] = localOrder
+				syncedHallOrders[f][d] = localOrder
 				continue
 			}
 
@@ -116,23 +151,19 @@ func updateWorldviewFromSync(latestWorldviews map[string]Worldview, inputSyncedH
 			if syncOrder.SyncState == localOrder.SyncState &&
 				localOrder.OwnerID != NoOwner &&
 				localOrder.SyncState != None {
-				inputSyncedHallOrders[f][d].OwnerID = localOrder.OwnerID
+				syncedHallOrders[f][d].OwnerID = localOrder.OwnerID
 			}
 		}
 	}
 
-	worldview.HallOrders = inputSyncedHallOrders
-	worldviewsMap[myID] = worldview
-	return worldviewsMap
+	wv.HallOrders = syncedHallOrders
+	worldviews[myID] = wv
+	return worldviews
 }
 
-// Får inn worldview fra network, bruker IDen til å legge til/oppdatere map
-func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, inputPeerWorldview Worldview) map[string]Worldview {
-	worldviewsMap := latestWorldviews
-	peerID := inputPeerWorldview.IdElevator
-	worldviewsMap[peerID] = inputPeerWorldview
-
-	return worldviewsMap
+func updatePeerWorldviewFromNetwork(worldviews map[string]Worldview, peerWv Worldview) map[string]Worldview {
+	worldviews[peerWv.IdElevator] = peerWv
+	return worldviews
 }
 
 // markPeerDeadInHallOrders degraderer Confirmed-ordrer eid av lostId til Unconfirmed/PeerDied,
@@ -154,11 +185,11 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 
 // updateWorldviewWithElevatorState oppdaterer worldview med ny elevatortilstand fra FSM,
 // inkludert serverte cab-ordrer og fullførte hall-ordrer (setter DeleteProposed).
-func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.ElevatorState, myID string) Worldview {
+func updateWorldviewWithElevatorState(worldview Worldview, newState t.ElevatorState, myID string) Worldview {
 	wv := worldview
 	prevState := wv.State
-	wv.State = inputStateElevator
-	floor := inputStateElevator.Floor
+	wv.State = newState
+	floor := newState.Floor
 
 	if floor < 0 || floor >= NumFloors {
 		return wv
@@ -176,7 +207,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 	// Case 1: FSM er DoorOpen nå (normal case - sjekk nåværende etasje)
 	// Case 2: FSM VAR DoorOpen og har akkurat lukket døren (fanger opp missed clears)
 	checkFloor := -1
-	if inputStateElevator.Behaviour == fsm.EB_DoorOpen {
+	if newState.Behaviour == fsm.EB_DoorOpen {
 		checkFloor = floor
 	} else if prevState.Behaviour == fsm.EB_DoorOpen {
 		checkFloor = prevState.Floor
@@ -188,7 +219,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 
 	upOrder := wv.HallOrders[checkFloor][fsm.B_HallUp]
 	if upOrder.SyncState == Confirmed &&
-		!inputStateElevator.Requests[checkFloor][fsm.B_HallUp] &&
+		!newState.Requests[checkFloor][fsm.B_HallUp] &&
 		(prevState.Requests[checkFloor][fsm.B_HallUp] || upOrder.OwnerID == myID) {
 		upOrder.SyncState = DeleteProposed
 		wv.HallOrders[checkFloor][fsm.B_HallUp] = upOrder
@@ -196,7 +227,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 
 	downOrder := wv.HallOrders[checkFloor][fsm.B_HallDown]
 	if downOrder.SyncState == Confirmed &&
-		!inputStateElevator.Requests[checkFloor][fsm.B_HallDown] &&
+		!newState.Requests[checkFloor][fsm.B_HallDown] &&
 		(prevState.Requests[checkFloor][fsm.B_HallDown] || downOrder.OwnerID == myID) {
 		downOrder.SyncState = DeleteProposed
 		wv.HallOrders[checkFloor][fsm.B_HallDown] = downOrder
@@ -221,7 +252,6 @@ func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string][
 			}
 		}
 	}
-
 	return ho
 }
 
@@ -262,251 +292,209 @@ func debugPrintHallOrders(context string, hallOrders HallOrders) {
 	}
 }
 
-func GoroutineForWorldview(
-	myID string,
-	elevatorToWorldviewCh <-chan t.ElevatorState,
-	syncToWorldviewCh <-chan HallOrders,
-	networkToWorldviewCh <-chan Worldview,
-	networkToInitCh <-chan Worldview,
-
-	lostPeerIdCh <-chan string,
-	newPeerIdCh <-chan string,
-	cabBtnCh <-chan int,
-	hallBtnCh <-chan [2]int,
-	lightsCh chan Worldview,
-	printHallOrdersReqCh <-chan bool,
-
-	assignerToWorldviewCh <-chan map[string][4][3]bool,
-	worldviewToAssignerCh chan map[string]Worldview,
-	worldviewToSyncCh chan map[string]Worldview,
-	worldviewToNetworkCh chan Worldview,
-	worldviewToFSMCh chan Worldview,
-) {
-
-	worldviewsMap := make(map[string]Worldview)
+func GoroutineForWorldview(myID string, ch WorldviewChannels) {
+	worldviews := make(map[string]Worldview)
 	initialWv := Worldview{
 		IdElevator:   myID,
 		AllCabOrders: map[string][NumFloors]bool{myID: {}},
 	}
-	worldviewsMap[myID] = worldviewInit(myID, initialWv, networkToInitCh)
+	worldviews[myID] = worldviewInit(myID, initialWv, ch.InitWorldview)
 
 	hasNetwork := true
 
-	copyMap := func(m map[string]Worldview) map[string]Worldview {
-		c := make(map[string]Worldview, len(m))
-		for k, v := range m {
-			if v.AllCabOrders != nil {
-				newAllCabOrders := make(map[string][NumFloors]bool, len(v.AllCabOrders))
-				for id, orders := range v.AllCabOrders {
-					newAllCabOrders[id] = orders
-				}
-				v.AllCabOrders = newAllCabOrders
-			}
-			c[k] = v
-		}
-		return c
-	}
-
-	sendLatestLights := func() {
-		wv := copyMap(worldviewsMap)[myID]
+	sendLights := func() {
+		wv := copyWorldviews(worldviews)[myID]
 		select {
-		case lightsCh <- wv:
+		case ch.Lights <- wv:
 		default:
 			select {
-			case <-lightsCh:
+			case <-ch.Lights:
 			default:
 			}
-			lightsCh <- wv
+			ch.Lights <- wv
 		}
 	}
 
-	sendLatestWorldviewToFSM := func(worldview Worldview) {
+	sendToFSM := func(wv Worldview) {
 		select {
-		case worldviewToFSMCh <- worldview:
+		case ch.ToFSM <- wv:
 		default:
 			select {
-			case <-worldviewToFSMCh:
+			case <-ch.ToFSM:
 			default:
 			}
-			worldviewToFSMCh <- worldview
+			ch.ToFSM <- wv
 		}
 	}
 
-	sendLatestToNetwork := func(worldview Worldview) {
+	sendToNetwork := func(wv Worldview) {
 		select {
-		case worldviewToNetworkCh <- worldview:
+		case ch.ToNetwork <- wv:
 		default:
 			select {
-			case <-worldviewToNetworkCh:
+			case <-ch.ToNetwork:
 			default:
 			}
-			worldviewToNetworkCh <- worldview
+			ch.ToNetwork <- wv
 		}
 	}
 
-	sendLatestToSync := func(worldviews map[string]Worldview) {
+	sendToSync := func(wvs map[string]Worldview) {
 		select {
-		case worldviewToSyncCh <- worldviews:
+		case ch.ToSync <- wvs:
 		default:
 			select {
-			case <-worldviewToSyncCh:
+			case <-ch.ToSync:
 			default:
 			}
-			worldviewToSyncCh <- worldviews
+			ch.ToSync <- wvs
 		}
 	}
 
-	sendLatestToAssigner := func(worldviews map[string]Worldview) {
+	sendToAssigner := func(wvs map[string]Worldview) {
 		select {
-		case worldviewToAssignerCh <- worldviews:
+		case ch.ToAssigner <- wvs:
 		default:
 			select {
-			case <-worldviewToAssignerCh:
+			case <-ch.ToAssigner:
 			default:
 			}
-			worldviewToAssignerCh <- worldviews
+			ch.ToAssigner <- wvs
 		}
 	}
 
 	for {
 		select {
-		case inputStateElevator := <-elevatorToWorldviewCh:
-			wv := worldviewsMap[myID]
-			wv = updateWorldviewWithElevatorState(wv, inputStateElevator, myID)
+		case newState := <-ch.ElevatorState:
+			wv := worldviews[myID]
+			wv = updateWorldviewWithElevatorState(wv, newState, myID)
 			if wv.AllCabOrders == nil {
 				wv.AllCabOrders = make(map[string][NumFloors]bool)
 			}
-			if inputStateElevator.Error {
+			if newState.Error {
 				wv.ErrorState = true
 				wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, myID)
 			} else {
 				wv.ErrorState = false
 			}
-			worldviewsMap[myID] = wv
-			sendLatestLights()
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+			worldviews[myID] = wv
+			sendLights()
+			sendToNetwork(copyWorldviews(worldviews)[myID])
+			sendToSync(copyWorldviews(worldviews))
 
-		case inputSyncedHallOrders := <-syncToWorldviewCh:
-			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
-			sendLatestToAssigner(copyMap(worldviewsMap))
-			sendLatestLights()
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
+		case syncedHallOrders := <-ch.SyncHallOrders:
+			worldviews = updateWorldviewFromSync(worldviews, syncedHallOrders, myID)
+			sendToAssigner(copyWorldviews(worldviews))
+			sendLights()
+			sendToNetwork(copyWorldviews(worldviews)[myID])
 
-		case inputPeerWorldview := <-networkToWorldviewCh:
-			if inputPeerWorldview.IdElevator == myID {
+		case peerWv := <-ch.PeerWorldview:
+			if peerWv.IdElevator == myID {
 				continue
 			}
-			worldviewsMap = updatePeerWorldviewFromNetwork(worldviewsMap, inputPeerWorldview)
-			wv := worldviewsMap[myID]
+			worldviews = updatePeerWorldviewFromNetwork(worldviews, peerWv)
+			wv := worldviews[myID]
 			if wv.AllCabOrders == nil {
 				wv.AllCabOrders = make(map[string][NumFloors]bool)
 			}
-			wv.AllCabOrders[inputPeerWorldview.IdElevator] = inputPeerWorldview.AllCabOrders[inputPeerWorldview.IdElevator]
-			if inputPeerWorldview.ErrorState {
-				wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, inputPeerWorldview.IdElevator)
+			wv.AllCabOrders[peerWv.IdElevator] = peerWv.AllCabOrders[peerWv.IdElevator]
+			if peerWv.ErrorState {
+				wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, peerWv.IdElevator)
 			}
-			worldviewsMap[myID] = wv
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+			worldviews[myID] = wv
+			sendToNetwork(copyWorldviews(worldviews)[myID])
+			sendToSync(copyWorldviews(worldviews))
 
-		case newPeerID := <-newPeerIdCh:
+		case newPeerID := <-ch.NewPeer:
 			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeerID)
 			if newPeerID == myID {
 				hasNetwork = true
 				// Gjenopprett hallOrders fra en kjent peer ved reconnect
-				wv := worldviewsMap[myID]
-				for id, peerWv := range worldviewsMap {
+				wv := worldviews[myID]
+				for id, peerWv := range worldviews {
 					if id != myID {
 						wv.HallOrders = peerWv.HallOrders
 						break
 					}
 				}
-				worldviewsMap[myID] = wv
+				worldviews[myID] = wv
 			}
 
-		case inputDeadPeerId := <-lostPeerIdCh:
-			if inputDeadPeerId == myID {
+		case lostPeerID := <-ch.LostPeer:
+			if lostPeerID == myID {
 				hasNetwork = false
 			}
-			worldviewsMap = handleLostPeer(worldviewsMap, myID, inputDeadPeerId)
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+			worldviews = handleLostPeer(worldviews, myID, lostPeerID)
+			sendToNetwork(copyWorldviews(worldviews)[myID])
+			sendToSync(copyWorldviews(worldviews))
 
-		case inputHallBtn := <-hallBtnCh:
+		case hallBtn := <-ch.HallBtn:
 			if hasNetwork {
-				worldviewsMap[myID] = addNewHallOrder(worldviewsMap[myID], inputHallBtn)
-				sendLatestLights()
-				sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-				sendLatestToSync(copyMap(worldviewsMap))
+				worldviews[myID] = addNewHallOrder(worldviews[myID], hallBtn)
+				sendLights()
+				sendToNetwork(copyWorldviews(worldviews)[myID])
+				sendToSync(copyWorldviews(worldviews))
 			}
 
-		case inputCabBtn := <-cabBtnCh:
-			worldviewsMap[myID] = addNewCabOrder(worldviewsMap[myID], inputCabBtn, myID)
-			sendLatestLights()
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+		case cabBtn := <-ch.CabBtn:
+			worldviews[myID] = addNewCabOrder(worldviews[myID], cabBtn, myID)
+			sendLights()
+			sendToNetwork(copyWorldviews(worldviews)[myID])
+			sendToSync(copyWorldviews(worldviews))
 
-		case inputAssignment := <-assignerToWorldviewCh:
-			wv := worldviewsMap[myID]
-			wv.HallOrders = updateOwnerIDsFromAssignment(wv.HallOrders, inputAssignment)
-			worldviewsMap[myID] = wv
-			sendLatestLights()
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestWorldviewToFSM(copyMap(worldviewsMap)[myID])
+		case assignment := <-ch.Assignment:
+			wv := worldviews[myID]
+			wv.HallOrders = updateOwnerIDsFromAssignment(wv.HallOrders, assignment)
+			worldviews[myID] = wv
+			sendLights()
+			sendToNetwork(copyWorldviews(worldviews)[myID])
+			sendToFSM(copyWorldviews(worldviews)[myID])
 
-		case <-printHallOrdersReqCh:
-			debugPrintHallOrders("stop button worldview", worldviewsMap[myID].HallOrders)
+		case <-ch.PrintDebug:
+			debugPrintHallOrders("stop button worldview", worldviews[myID].HallOrders)
 		}
 	}
 }
 
 // handleLostPeer markerer tapt peer som død og degraderer dens ordrer til Unconfirmed/PeerDied.
-func handleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
+func handleLostPeer(worldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
 	if lostID == myID {
-		return latestWorldviews
+		return worldviews
 	}
-	lwv := latestWorldviews
-	lostWorldview := lwv[lostID]
-	lostWorldview.Dead = true
-	lwv[lostID] = lostWorldview
+	lostWv := worldviews[lostID]
+	lostWv.Dead = true
+	worldviews[lostID] = lostWv
 
-	wv := lwv[myID]
+	wv := worldviews[myID]
 	wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, lostID)
+	worldviews[myID] = wv
 
-	lwv[myID] = wv
-
-	return lwv
+	return worldviews
 }
 
-func addNewCabOrder(worldview Worldview, inputCabBtn int, myID string) Worldview {
-	if inputCabBtn < 0 || inputCabBtn >= NumFloors {
+func addNewCabOrder(worldview Worldview, floor int, myID string) Worldview {
+	if floor < 0 || floor >= NumFloors {
 		return worldview
 	}
 	wv := worldview
-
 	cabOrders := wv.AllCabOrders[myID]
-	cabOrders[inputCabBtn] = true
+	cabOrders[floor] = true
 	wv.AllCabOrders[myID] = cabOrders
-
 	return wv
 }
 
-func addNewHallOrder(worldview Worldview, inputHallBtn [2]int) Worldview {
-	floor := inputHallBtn[0]
-	dir := inputHallBtn[1]
+func addNewHallOrder(worldview Worldview, btn [2]int) Worldview {
+	floor := btn[0]
+	dir := btn[1]
 	if floor < 0 || floor >= NumFloors || dir < 0 || dir >= Directions {
 		return worldview
 	}
 	wv := worldview
-
 	order := wv.HallOrders[floor][dir]
-
 	if order.SyncState == None {
 		order.SyncState = Unconfirmed
 		order.OwnerID = NoOwner
 	}
 	wv.HallOrders[floor][dir] = order
-
 	return wv
 }
