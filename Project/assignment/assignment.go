@@ -84,7 +84,7 @@ func buildAssignerInput(latestWorldviews map[string]wv.Worldview, myID string) h
 	}
 }
 
-func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (map[string][4][3]bool, error) {
+func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (map[string]wv.AssignmentMatrix, error) {
 	input := buildAssignerInput(latestWorldviews, myID)
 	if len(input.States) == 0 {
 		return nil, fmt.Errorf("ingen tilgjengelige heiser (alle i error state)")
@@ -110,7 +110,7 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (
 	}
 
 	// Pakke ut JSON. Evt i annen funk?
-	var result map[string][4][3]bool
+	var result map[string]wv.AssignmentMatrix
 	err = json.Unmarshal(output, &result)
 
 	return result, nil
@@ -119,9 +119,9 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (
 func RunHallRequestAssigner(
 	myID string,
 	worldviewToAssignerCh <-chan map[string]wv.Worldview,
-	assignerToWorldviewCh chan<- map[string][4][3]bool,
+	assignerToWorldviewCh chan<- map[string]wv.AssignmentMatrix,
 ) {
-	var lastResult map[string][4][3]bool
+	var lastResult map[string]wv.AssignmentMatrix
 	for {
 		latestWorldviews := <-worldviewToAssignerCh
 		result, err := assignHallRequests(latestWorldviews, myID)

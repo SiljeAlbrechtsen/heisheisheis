@@ -52,6 +52,7 @@ type Order struct {
 }
 
 type HallOrders [N_FLOORS][2]Order
+type AssignmentMatrix [N_FLOORS][N_BUTTONS]bool
 
 // Worldview type — used across FSM, worldview, and assignment packages
 type Worldview struct {

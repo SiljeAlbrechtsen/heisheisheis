@@ -24,7 +24,7 @@ func main() {
 	syncToWorldviewCh := make(chan wv.HallOrders, 1)
 	networkToWorldviewCh := make(chan wv.Worldview, 1)
 	networkToInitCh := make(chan wv.Worldview, 1)
-	assignerToWorldviewCh := make(chan map[string][4][3]bool, 1)
+	assignerToWorldviewCh := make(chan map[string]wv.AssignmentMatrix, 1)
 	cabBtnCh := make(chan int, 8)
 	hallBtnCh := make(chan [2]int, 8)
 
