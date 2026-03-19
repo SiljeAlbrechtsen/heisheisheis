@@ -60,7 +60,6 @@ type Worldview struct {
 	HallOrders   HallOrders
 	State        ElevatorState
 	AllCabOrders map[string][N_FLOORS]bool
-	ErrorState   bool // Settes ved motorstopp/obstruction
-	Dead         bool // Settes ved nettverkstap
+	ErrorState   bool // Set when the motor stops or obstruction occurs
+	Dead         bool // Set on network loss
 }
-

@@ -34,7 +34,7 @@ func InitElevatorState() ElevatorState {
 	}
 }
 
-// sendState sender alltid siste elevatorState til worldview, og dropper eventuelle gamle verdier i kanalen.
+// sendState always sends the latest elevatorState to worldview and drops any older value in the channel.
 func sendState(elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
 	select {
 	case elevatorStateCh <- *elevatorState:

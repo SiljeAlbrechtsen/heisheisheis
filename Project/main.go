@@ -19,52 +19,52 @@ func main() {
 	// `go run main.go -id=our_id`
 	id := setup.GetNodeID()
 
-	// Channels inn til worldview
-	elevatorToWorldviewCh := make(chan fsm.ElevatorState, 1)
-	syncToWorldviewCh := make(chan wv.HallOrders, 1)
-	networkToWorldviewCh := make(chan wv.Worldview, 1)
-	networkToInitCh := make(chan wv.Worldview, 1)
-	assignerToWorldviewCh := make(chan map[string]wv.AssignmentMatrix, 1)
-	cabBtnCh := make(chan int, 8)
-	hallBtnCh := make(chan [2]int, 8)
+	// Channels into worldview
+	elevatorStateCh := make(chan fsm.ElevatorState, 1)
+	syncedHallOrdersCh := make(chan wv.HallOrders, 1)
+	peerWorldviewCh := make(chan wv.Worldview, 1)
+	initialWorldviewCh := make(chan wv.Worldview, 1)
+	assignmentCh := make(chan map[string]wv.AssignmentMatrix, 1)
+	cabRequestCh := make(chan int, 8)
+	hallRequestCh := make(chan [2]int, 8)
 
-	lightsCh := make(chan wv.Worldview, 1)
-	printHallOrdersReqCh := make(chan bool, 1)
+	lightStateCh := make(chan wv.Worldview, 1)
+	debugPrintReqCh := make(chan bool, 1)
 
-	// Channels ut fra worldview
-	worldviewToAssignerCh := make(chan map[string]wv.Worldview, 1)
-	worldviewToSyncCh := make(chan map[string]wv.Worldview, 1)
-	worldviewToNetworkCh := make(chan wv.Worldview, 1)
-	worldviewToFSMCh := make(chan wv.Worldview, 16)
+	// Channels out of worldview
+	worldviewsForAssignerCh := make(chan map[string]wv.Worldview, 1)
+	worldviewsForSyncCh := make(chan map[string]wv.Worldview, 1)
+	localWorldviewBroadcastCh := make(chan wv.Worldview, 1)
+	fsmWorldviewCh := make(chan wv.Worldview, 16)
+	newPeerCh, lostPeerCh := setup.StartPeerDiscovery(id)
 
-	newPeerIdCh, lostPeerIdCh := setup.StartPeerDiscovery(id)
+	// Channels for network
+	broadcastTx, broadcastRx := setup.SetupWorldviewNetwork()
 
-	worldviewTx, worldviewRx := setup.SetupWorldviewNetwork()
-
-	go hardware.ButtonLightsListener(lightsCh)
-	go hardware.ButtonsListener(cabBtnCh, hallBtnCh)
-	go setup.TransmitWorldviewPeriodically(worldviewTx, worldviewToNetworkCh)
-	go sync.GoroutineSync(id, syncToWorldviewCh, worldviewToSyncCh)
-	go wv.GoroutineForWorldview(id, wv.WorldviewChannels{
-		ElevatorState:  elevatorToWorldviewCh,
-		SyncHallOrders: syncToWorldviewCh,
-		PeerWorldview:  networkToWorldviewCh,
-		InitWorldview:  networkToInitCh,
-		LostPeer:       lostPeerIdCh,
-		NewPeer:        newPeerIdCh,
-		CabBtn:         cabBtnCh,
-		HallBtn:        hallBtnCh,
-		Assignment:     assignerToWorldviewCh,
-		PrintDebug:     printHallOrdersReqCh,
-		Lights:         lightsCh,
-		ToAssigner:     worldviewToAssignerCh,
-		ToSync:         worldviewToSyncCh,
-		ToNetwork:      worldviewToNetworkCh,
-		ToFSM:          worldviewToFSMCh,
+	go hardware.ButtonLightsListener(lightStateCh)
+	go hardware.ButtonsListener(cabRequestCh, hallRequestCh)
+	go setup.TransmitWorldviewPeriodically(broadcastTx, localWorldviewBroadcastCh)
+	go sync.GoroutineSync(id, syncedHallOrdersCh, worldviewsForSyncCh)
+	go wv.RunWorldview(id, wv.WorldviewChannels{
+		ElevatorState:  elevatorStateCh,
+		SyncHallOrders: syncedHallOrdersCh,
+		PeerWorldview:  peerWorldviewCh,
+		InitWorldview:  initialWorldviewCh,
+		LostPeer:       lostPeerCh,
+		NewPeer:        newPeerCh,
+		CabBtn:         cabRequestCh,
+		HallBtn:        hallRequestCh,
+		Assignment:     assignmentCh,
+		PrintDebug:     debugPrintReqCh,
+		Lights:         lightStateCh,
+		ToAssigner:     worldviewsForAssignerCh,
+		ToSync:         worldviewsForSyncCh,
+		ToNetwork:      localWorldviewBroadcastCh,
+		ToFSM:          fsmWorldviewCh,
 	})
-	go assign.RunHallRequestAssigner(id, worldviewToAssignerCh, assignerToWorldviewCh)
-	go fsm.RunElevator(worldviewToFSMCh, elevatorToWorldviewCh, printHallOrdersReqCh)
-	go setup.ForwardWorldviewFromNetwork(worldviewRx, networkToWorldviewCh, networkToInitCh)
+	go assign.RunHallRequestAssigner(id, worldviewsForAssignerCh, assignmentCh)
+	go fsm.RunElevator(fsmWorldviewCh, elevatorStateCh, debugPrintReqCh)
+	go setup.ForwardWorldviewFromNetwork(broadcastRx, peerWorldviewCh, initialWorldviewCh)
 
 	fmt.Println("Started")
 	select {}

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func ButtonsListener(cabButtonCh chan int, hallButtonCh chan [2]int) {
+func ButtonsListener(cabRequestCh chan int, hallRequestCh chan [2]int) {
 	elevioButtonCh := make(chan elevio.ButtonEvent)
 	go elevio.PollButtons(elevioButtonCh)
 
@@ -14,15 +14,15 @@ func ButtonsListener(cabButtonCh chan int, hallButtonCh chan [2]int) {
 		select {
 		case event := <-elevioButtonCh:
 			if event.Button == elevio.BT_Cab {
-				cabButtonCh <- event.Floor
+				cabRequestCh <- event.Floor
 			} else {
-				hallButtonCh <- [2]int{event.Floor, int(event.Button)}
+				hallRequestCh <- [2]int{event.Floor, int(event.Button)}
 			}
 		}
 	}
 }
 
-// TurnOffAllLights slår av alle knapplys, dørlampe og stopplampe ved oppstart.
+// TurnOffAllLights turns off all button lamps, the door lamp, and the stop lamp on startup.
 func TurnOffAllLights() {
 	for f := 0; f < t.N_FLOORS; f++ {
 		for b := elevio.ButtonType(0); b < elevio.ButtonType(t.N_BUTTONS); b++ {
@@ -57,15 +57,15 @@ func ErrorLight(errorLight chan bool) {
 	}
 }
 
-func ButtonLightsListener(lightsCh <-chan t.Worldview) {
-	for wv := range lightsCh {
-		// Hall-lys: på hvis ordren er Confirmed
+func ButtonLightsListener(lightStateCh <-chan t.Worldview) {
+	for wv := range lightStateCh {
+		// Hall lights: on if the order is Confirmed
 		for f := 0; f < t.N_FLOORS; f++ {
 			for d := 0; d < 2; d++ {
 				elevio.SetButtonLamp(elevio.ButtonType(d), f, wv.HallOrders[f][d].SyncState == t.Confirmed)
 			}
 		}
-		// Cab-lys: på hvis cab-ordre finnes for denne heisen
+		// Cab lights: on if a cab order exists for this elevator
 		if cabOrders, ok := wv.AllCabOrders[wv.IdElevator]; ok {
 			for f := 0; f < t.N_FLOORS; f++ {
 				elevio.SetButtonLamp(elevio.BT_Cab, f, cabOrders[f])

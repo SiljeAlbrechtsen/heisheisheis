@@ -58,16 +58,17 @@ func secondToNextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncStat
 	}
 }
 
-// syncHallOrders synkroniserer hall orders mot alle kjente peers og returnerer oppdatert tilstand.
+// syncHallOrders synchronizes hall orders against all known peers and returns the updated state.
 func syncHallOrders(
 	latestWorldviews map[string]wv.Worldview,
 	myID string,
 ) wv.HallOrders {
 	myHallOrders := latestWorldviews[myID].HallOrders
 
-	// Steg 0: Propager peerDied — hvis en alive peer har {Unconfirmed, peerDied} og vi har
-	// {Confirmed, _}, skal vi følge ned. Eieren av ordren har markert seg som dead/error,
-	// og denne infoen må spres selv om vi ikke fikk originalbroadcastet fra den feilende heisen.
+	// Step 0: Propagate peerDied. If a live peer has {Unconfirmed, peerDied} and we have
+	// {Confirmed, _}, we should follow it downward. The owner of the order has marked itself
+	// as dead/error, and that information must be propagated even if we did not receive the
+	// original broadcast from the failing elevator.
 	for _, peer := range latestWorldviews {
 		if peer.Dead {
 			continue
@@ -84,9 +85,9 @@ func syncHallOrders(
 		}
 	}
 
-	// Steg 1: Følg peers som er ett steg foran (hopp kun over Dead og seg selv)
-	// PeerDied-ordrer (fra Steg 0 eller worldview) skal IKKE promoteres her —
-	// kun Steg 2 konsensus kan avansere dem (med OwnerID-clearing).
+	// Step 1: Follow peers that are one step ahead, skipping only Dead peers and ourselves.
+	// PeerDied orders, whether from Step 0 or worldview, must NOT be promoted here.
+	// Only Step 2 consensus may advance them, with OwnerID clearing.
 	for _, peer := range latestWorldviews {
 		if peer.Dead || peer.IdElevator == myID {
 			continue
@@ -108,7 +109,7 @@ func syncHallOrders(
 		}
 	}
 
-	// Steg 2: Konsensussjekk — avanser state hvis alle er enige
+	// Step 2: Consensus check. Advance the state if everyone agrees.
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
 			myOrder := myHallOrders[f][d]
@@ -116,9 +117,9 @@ func syncHallOrders(
 			switch myOrder.SyncState {
 
 			case wv.Unconfirmed:
-				// Krev at vi allerede har broadcast Unconfirmed-state før vi tillater konsensus.
-				// Hindrer at Confirmed→Unconfirmed-degradering (peerDied via Steg 0) hopper
-				// direkte til Confirmed i samme runde uten å ha fortalt andre om det.
+				// Require that we have already broadcast the Unconfirmed state before allowing consensus.
+				// This prevents a Confirmed -> Unconfirmed downgrade (peerDied via Step 0) from jumping
+				// directly back to Confirmed in the same round without first informing the others.
 				if latestWorldviews[myID].HallOrders[f][d].SyncState != wv.Unconfirmed {
 					break
 				}
@@ -137,9 +138,9 @@ func syncHallOrders(
 		}
 	}
 
-	// Steg 3: OwnerID-konflikt — hvis to alive peers er uenige om hvem som eier en Confirmed ordre,
-	// velg deterministisk vinner med minste OwnerID.
-	// Begge heiser konvergerer uavhengig til samme eier etter én sync-runde.
+	// Step 3: OwnerID conflict. If two live peers disagree on who owns a Confirmed order,
+	// choose the deterministic winner with the smallest OwnerID.
+	// Both elevators converge independently to the same owner after one sync round.
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
 			myOrder := myHallOrders[f][d]
@@ -164,7 +165,7 @@ func syncHallOrders(
 		}
 	}
 
-	// Steg 4: Normaliser — None-ordrer skal aldri ha owner
+	// Step 4: Normalize. None orders should never have an owner.
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
 			if myHallOrders[f][d].SyncState == wv.None {
@@ -178,20 +179,20 @@ func syncHallOrders(
 
 func GoroutineSync(
 	myID string,
-	syncToWorldviewCh chan wv.HallOrders,
-	worldviewToSyncCh <-chan map[string]wv.Worldview,
+	syncedHallOrdersCh chan wv.HallOrders,
+	worldviewsForSyncCh <-chan map[string]wv.Worldview,
 ) {
 	for {
-		latestWorldviews := <-worldviewToSyncCh
+		latestWorldviews := <-worldviewsForSyncCh
 		syncedHallOrders := syncHallOrders(latestWorldviews, myID)
 		select {
-		case syncToWorldviewCh <- syncedHallOrders:
+		case syncedHallOrdersCh <- syncedHallOrders:
 		default:
 			select {
-			case <-syncToWorldviewCh:
+			case <-syncedHallOrdersCh:
 			default:
 			}
-			syncToWorldviewCh <- syncedHallOrders
+			syncedHallOrdersCh <- syncedHallOrders
 		}
 	}
 }

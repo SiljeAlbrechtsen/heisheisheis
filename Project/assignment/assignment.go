@@ -59,7 +59,7 @@ func convertHallOrdersToBool(hallOrders wv.HallOrders) [wv.NumFloors][wv.Directi
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
 			order := hallOrders[f][d]
-			// Reassign orders som ikke har en levende eier
+			// Reassign orders that do not have a living owner
 			converted[f][d] = order.SyncState == wv.Confirmed &&
 				(order.OwnerID == wv.NoOwner || order.OwnerID == wv.PeerDied)
 		}
@@ -96,7 +96,6 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (
 	}
 	jsonInput = append(jsonInput, '\n')
 
-	// Sende til hall request assigner og få svar
 	var stderr bytes.Buffer
 	cmd := exec.Command("./assignment/hall_request_assigner")
 	cmd.Stdin = bytes.NewReader(jsonInput)
@@ -109,7 +108,6 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (
 		return nil, err
 	}
 
-	// Pakke ut JSON. Evt i annen funk?
 	var result map[string]wv.AssignmentMatrix
 	err = json.Unmarshal(output, &result)
 
@@ -118,19 +116,19 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (
 
 func RunHallRequestAssigner(
 	myID string,
-	worldviewToAssignerCh <-chan map[string]wv.Worldview,
-	assignerToWorldviewCh chan<- map[string]wv.AssignmentMatrix,
+	worldviewsForAssignerCh <-chan map[string]wv.Worldview,
+	assignmentCh chan<- map[string]wv.AssignmentMatrix,
 ) {
 	var lastResult map[string]wv.AssignmentMatrix
 	for {
-		latestWorldviews := <-worldviewToAssignerCh
+		latestWorldviews := <-worldviewsForAssignerCh
 		result, err := assignHallRequests(latestWorldviews, myID)
 		if err != nil {
 			fmt.Println("Assigner feil:", err)
 			continue
 		}
 		if !reflect.DeepEqual(result, lastResult) {
-			assignerToWorldviewCh <- result
+			assignmentCh <- result
 			lastResult = result
 		}
 	}

@@ -14,8 +14,8 @@ import (
 	"time"
 )
 
-// ResolveElevatorAddr finner adressen til heissimulator eller -hardware.
-// Leser ELEVATOR_ADDR fra miljøvariabel, ellers prober lokalt nettverk på port 15657.
+// ResolveElevatorAddr finds the address of the elevator simulator or hardware.
+// It reads ELEVATOR_ADDR from the environment; otherwise it probes the local network on port 15657.
 func ResolveElevatorAddr() string {
 	if addr := strings.TrimSpace(os.Getenv("ELEVATOR_ADDR")); addr != "" {
 		return addr
@@ -37,36 +37,36 @@ func ResolveElevatorAddr() string {
 	return candidates[0]
 }
 
-// TransmitWorldviewPeriodically sender vår worldview periodisk på nettverket.
-// Sender alltid siste versjon hvert 100ms.
-func TransmitWorldviewPeriodically(worldviewTx chan<- wv.Worldview, worldviewToNetworkCh <-chan wv.Worldview) {
-	currentMsg := <-worldviewToNetworkCh
+// TransmitWorldviewPeriodically sends our worldview periodically over the network.
+// It always sends the latest version every 100 ms.
+func TransmitWorldviewPeriodically(broadcastTx chan<- wv.Worldview, localWorldviewBroadcastCh <-chan wv.Worldview) {
+	currentMsg := <-localWorldviewBroadcastCh
 
 	for {
 		select {
-		case newMsg := <-worldviewToNetworkCh:
+		case newMsg := <-localWorldviewBroadcastCh:
 			currentMsg = newMsg
 		case <-time.After(100 * time.Millisecond):
-			worldviewTx <- currentMsg
+			broadcastTx <- currentMsg
 		}
 	}
 }
 
-// ForwardWorldviewFromNetwork videresender mottatte worldviews fra nettverket til worldview-goroutinen.
-// Sender ikke-blokkerende til init-kanalen (kun relevant ved oppstart).
-func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorldviewCh chan<- wv.Worldview, networkToInitCh chan<- wv.Worldview) {
+// ForwardWorldviewFromNetwork forwards received worldviews from the network to the worldview goroutine.
+// It sends non-blockingly to the init channel, which is only relevant during startup.
+func ForwardWorldviewFromNetwork(broadcastRx <-chan wv.Worldview, peerWorldviewCh chan<- wv.Worldview, initialWorldviewCh chan<- wv.Worldview) {
 	for {
-		received := <-worldviewRx
+		received := <-broadcastRx
 		select {
-		case networkToInitCh <- received:
+		case initialWorldviewCh <- received:
 		default:
 		}
-		networkToWorldviewCh <- received
+		peerWorldviewCh <- received
 	}
 }
 
-// GetNodeID henter node-ID fra kommandolinjeflagg (-id), eller genererer en unik ID
-// basert på lokal IP og prosess-ID.
+// GetNodeID gets the node ID from the command-line flag (-id), or generates a unique ID
+// based on the local IP address and process ID.
 func GetNodeID() string {
 	var id string
 	flag.StringVar(&id, "id", "", "id of this peer")
@@ -83,38 +83,38 @@ func GetNodeID() string {
 	return id
 }
 
-// StartPeerDiscovery starter peer-oppdagelse og returnerer kanaler for nye og tapte peers.
+// StartPeerDiscovery starts peer discovery and returns channels for new and lost peers.
 func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
 	peerUpdateCh := make(chan peers.PeerUpdate, 1)
-	newPeerIdCh := make(chan string, 1)
-	lostPeerIdCh := make(chan string, 1)
+	newPeerCh := make(chan string, 1)
+	lostPeerCh := make(chan string, 1)
 
-	peerTxEnable := make(chan bool)
-	go peers.Transmitter(10001, id, peerTxEnable)
+	peerBroadcastEnabledCh := make(chan bool)
+	go peers.Transmitter(10001, id, peerBroadcastEnabledCh)
 	go peers.Receiver(10001, peerUpdateCh)
 
 	go func() {
 		for update := range peerUpdateCh {
 			fmt.Printf("Peer update: peers=%q new=%q lost=%q\n", update.Peers, update.New, update.Lost)
 			if update.New != "" {
-				newPeerIdCh <- update.New
+				newPeerCh <- update.New
 			}
 			for _, lostId := range update.Lost {
-				lostPeerIdCh <- lostId
+				lostPeerCh <- lostId
 			}
 		}
 	}()
 
-	return newPeerIdCh, lostPeerIdCh
+	return newPeerCh, lostPeerCh
 }
 
-// SetupWorldviewNetwork oppretter kanaler og starter broadcast-sender/-mottaker for worldview.
+// SetupWorldviewNetwork creates channels and starts the broadcast sender/receiver for worldview.
 func SetupWorldviewNetwork() (chan<- wv.Worldview, <-chan wv.Worldview) {
-	worldviewTx := make(chan wv.Worldview)
-	worldviewRx := make(chan wv.Worldview)
+	broadcastTx := make(chan wv.Worldview)
+	broadcastRx := make(chan wv.Worldview)
 
-	go bcast.Transmitter(10002, worldviewTx)
-	go bcast.Receiver(10002, worldviewRx)
+	go bcast.Transmitter(10002, broadcastTx)
+	go bcast.Receiver(10002, broadcastRx)
 
-	return worldviewTx, worldviewRx
+	return broadcastTx, broadcastRx
 }

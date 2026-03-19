@@ -12,7 +12,7 @@ const (
 	NumFloors  = t.N_FLOORS
 )
 
-// Spesielle OwnerID-verdier brukt i synkroniseringsprotokollen
+// Special OwnerID values used in the synchronization protocol.
 const (
 	PeerDied = "peerDied"
 	NoOwner  = ""
@@ -32,9 +32,9 @@ type HallOrders = t.HallOrders
 type Worldview = t.Worldview
 type AssignmentMatrix = t.AssignmentMatrix
 
-// WorldviewChannels grupperer alle kanaler inn og ut av worldview-goroutinen.
+// WorldviewChannels groups all channels into and out of the worldview goroutine.
 type WorldviewChannels struct {
-	// Worldview leser fra disse
+	// Worldview reads from these
 	ElevatorState  <-chan t.ElevatorState
 	SyncHallOrders <-chan HallOrders
 	PeerWorldview  <-chan Worldview
@@ -46,7 +46,7 @@ type WorldviewChannels struct {
 	Assignment     <-chan map[string]AssignmentMatrix
 	PrintDebug     <-chan bool
 
-	// Worldview skriver til disse
+	// Worldview writes to these
 	Lights     chan Worldview
 	ToAssigner chan map[string]Worldview
 	ToSync     chan map[string]Worldview
@@ -54,7 +54,7 @@ type WorldviewChannels struct {
 	ToFSM      chan Worldview
 }
 
-// copyWorldviews lager en dyp kopi av worldviews-mapet (inkl. AllCabOrders).
+// copyWorldviews creates a deep copy of the worldviews map, including AllCabOrders.
 func copyWorldviews(m map[string]Worldview) map[string]Worldview {
 	c := make(map[string]Worldview, len(m))
 	for k, v := range m {
@@ -91,20 +91,20 @@ func worldviewInit(myID string, myWorldview Worldview, initCh <-chan Worldview) 
 }
 
 // _____________________________________________________________________________
-// ----------FUNKSJONER FOR Å TA IMOT OG HÅNDTERE DATA FRA ANDRE MODULER--------
+// ----------FUNCTIONS FOR RECEIVING AND HANDLING DATA FROM OTHER MODULES--------
 // _____________________________________________________________________________
 
-// shouldAcceptSyncOrder avgjør om sync-resultatet er gyldig fremgang
-// og ikke et stale resultat som ville regresse lokal tilstand.
-// shouldAcceptSyncOrder avgjør om sync-resultatet representerer gyldig fremgang.
-// Syklusen er: None(0) → Unconfirmed(1) → Confirmed(2) → DeleteProposed(3) → None(0)
+// shouldAcceptSyncOrder determines whether the sync result is valid progress
+// and not a stale result that would regress local state.
+// shouldAcceptSyncOrder determines whether the sync result represents valid progress.
+// The cycle is: None(0) -> Unconfirmed(1) -> Confirmed(2) -> DeleteProposed(3) -> None(0)
 func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
 	if syncOrder.SyncState == localOrder.SyncState {
 		return true
 	}
 
-	// Fremover i syklusen (numerisk)
-	// Unntak: ikke re-bekreft en ordre vi allerede har markert som PeerDied
+		// Forward in the cycle (numerically)
+		// Exception: do not reconfirm an order we have already marked as PeerDied
 	if syncOrder.SyncState > localOrder.SyncState {
 		staleConfirm := localOrder.SyncState == Unconfirmed &&
 			localOrder.OwnerID == PeerDied &&
@@ -113,12 +113,12 @@ func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
 		return !staleConfirm
 	}
 
-	// Syklusfullføring: DeleteProposed → None
+	// Cycle completion: DeleteProposed -> None
 	if localOrder.SyncState == DeleteProposed && syncOrder.SyncState == None {
 		return true
 	}
 
-	// PeerDied-degradering: Confirmed → Unconfirmed/PeerDied
+	// PeerDied downgrade: Confirmed -> Unconfirmed/PeerDied
 	if localOrder.SyncState == Confirmed &&
 		syncOrder.SyncState == Unconfirmed &&
 		syncOrder.OwnerID == PeerDied {
@@ -130,7 +130,7 @@ func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
 
 func updateWorldviewFromSync(worldviews map[string]Worldview, incomingOrders HallOrders, myID string) map[string]Worldview {
 	wv := worldviews[myID]
-	merged := incomingOrders // start fra incoming, overstyr avviste entries med lokal tilstand
+	merged := incomingOrders // start from incoming, override rejected entries with local state
 
 	for f := 0; f < NumFloors; f++ {
 		for d := 0; d < Directions; d++ {
@@ -138,13 +138,13 @@ func updateWorldviewFromSync(worldviews map[string]Worldview, incomingOrders Hal
 			syncOrder := incomingOrders[f][d]
 
 			if !shouldAcceptSyncOrder(localOrder, syncOrder) {
-				// Stale sync-resultat — behold lokal tilstand
+				// Stale sync result; keep the local state
 				merged[f][d] = localOrder
 				continue
 			}
 
-			// Bevar lokalt satt OwnerID kun hvis sync ikke har en konkret eier.
-			// Hvis sync har satt en konkret eier (f.eks. via konfliktløsning), bruk den.
+			// Preserve the locally set OwnerID only if sync has no concrete owner.
+			// If sync has assigned a concrete owner (for example via conflict resolution), use it.
 			if syncOrder.SyncState == localOrder.SyncState &&
 				localOrder.OwnerID != NoOwner &&
 				localOrder.SyncState != None &&
@@ -159,8 +159,8 @@ func updateWorldviewFromSync(worldviews map[string]Worldview, incomingOrders Hal
 	return worldviews
 }
 
-// applyPeerWorldview lagrer peerens worldview og oppdaterer egen tilstand basert på den:
-// synkroniserer cab orders og degraderer hall orders hvis peeren er i error.
+// applyPeerWorldview stores the peer's worldview and updates local state based on it:
+// it synchronizes cab orders and downgrades hall orders if the peer is in an error state.
 func applyPeerWorldview(worldviews map[string]Worldview, peerWv Worldview, myID string) map[string]Worldview {
 	worldviews[peerWv.IdElevator] = peerWv
 
@@ -176,8 +176,8 @@ func applyPeerWorldview(worldviews map[string]Worldview, peerWv Worldview, myID 
 	return worldviews
 }
 
-// markPeerDeadInHallOrders degraderer Confirmed-ordrer eid av lostId til Unconfirmed/PeerDied,
-// slik at andre heiser kan ta over ordren.
+// markPeerDeadInHallOrders downgrades Confirmed orders owned by lostId to
+// Unconfirmed/PeerDied so that other elevators can take over the order.
 func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	ho := hallOrders
 	for i, row := range ho {
@@ -193,8 +193,8 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	return ho
 }
 
-// updateWorldviewWithElevatorState oppdaterer worldview med ny elevatortilstand fra FSM,
-// inkludert error-state, serverte cab-ordrer og fullførte hall-ordrer (setter DeleteProposed).
+// updateWorldviewWithElevatorState updates the worldview with a new elevator state from the FSM,
+// including the error state, served cab orders, and completed hall orders (setting DeleteProposed).
 func updateWorldviewWithElevatorState(worldview Worldview, newState t.ElevatorState, myID string) Worldview {
 	wv := worldview
 	prevState := wv.State
@@ -219,9 +219,9 @@ func updateWorldviewWithElevatorState(worldview Worldview, newState t.ElevatorSt
 		wv.AllCabOrders[myID] = orders
 	}
 
-	// Sjekk for servede hall-ordrer:
-	// Case 1: FSM er DoorOpen nå (normal case - sjekk nåværende etasje)
-	// Case 2: FSM VAR DoorOpen og har akkurat lukket døren (fanger opp missed clears)
+	// Check for served hall orders:
+	// Case 1: the FSM is DoorOpen now (normal case - check the current floor)
+	// Case 2: the FSM WAS DoorOpen and has just closed the door (catches missed clears)
 	checkFloor := -1
 	if newState.Behaviour == fsm.EB_DoorOpen {
 		checkFloor = floor
@@ -307,7 +307,7 @@ func debugPrintHallOrders(context string, hallOrders HallOrders) {
 	}
 }
 
-func GoroutineForWorldview(myID string, ch WorldviewChannels) {
+func RunWorldview(myID string, ch WorldviewChannels) {
 	worldviews := make(map[string]Worldview)
 	initialWv := Worldview{
 		IdElevator:   myID,
@@ -404,7 +404,7 @@ func GoroutineForWorldview(myID string, ch WorldviewChannels) {
 			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeerID)
 			if newPeerID == myID {
 				hasNetwork = true
-				// Gjenopprett hallOrders fra en kjent peer ved reconnect
+				// Restore hallOrders from a known peer on reconnect
 				wv := worldviews[myID]
 				for id, peerWv := range worldviews {
 					if id != myID {
@@ -451,7 +451,7 @@ func GoroutineForWorldview(myID string, ch WorldviewChannels) {
 	}
 }
 
-// handleLostPeer markerer tapt peer som død og degraderer dens ordrer til Unconfirmed/PeerDied.
+// handleLostPeer marks a lost peer as dead and downgrades its orders to Unconfirmed/PeerDied.
 func handleLostPeer(worldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
 	if lostID == myID {
 		return worldviews
