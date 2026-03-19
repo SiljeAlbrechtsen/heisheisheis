@@ -30,6 +30,7 @@ const (
 type Order = t.Order
 type HallOrders = t.HallOrders
 type Worldview = t.Worldview
+type AssignmentMatrix = t.AssignmentMatrix
 
 // WorldviewChannels grupperer alle kanaler inn og ut av worldview-goroutinen.
 type WorldviewChannels struct {
@@ -42,7 +43,7 @@ type WorldviewChannels struct {
 	NewPeer        <-chan string
 	CabBtn         <-chan int
 	HallBtn        <-chan [2]int
-	Assignment     <-chan map[string][4][3]bool
+	Assignment     <-chan map[string]AssignmentMatrix
 	PrintDebug     <-chan bool
 
 	// Worldview skriver til disse
@@ -251,7 +252,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, newState t.ElevatorSt
 	return wv
 }
 
-func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string][4][3]bool) HallOrders {
+func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string]AssignmentMatrix) HallOrders {
 	ho := hallOrders
 	for floor := 0; floor < NumFloors; floor++ {
 		for dir := 0; dir < Directions; dir++ {
