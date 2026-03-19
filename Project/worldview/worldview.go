@@ -447,7 +447,7 @@ func GoroutineForWorldview(
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = worldviewsMap[myID]
 			if hasNetwork {
-				myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
+				myWorldview = addHallOrder(myWorldview, inputHallBtn)
 				worldviewsMap[myID] = myWorldview
 				sendLatestLights()
 				sendLatestToNetwork(copyMap(worldviewsMap)[myID])
@@ -456,7 +456,7 @@ func GoroutineForWorldview(
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = worldviewsMap[myID]
-			myWorldview = addNewCabOrder(myWorldview, inputCabBtn, myID)
+			myWorldview = addCabOrder(myWorldview, inputCabBtn, myID)
 			worldviewsMap[myID] = myWorldview
 			sendLatestLights()
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
