@@ -17,8 +17,6 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 	elevatorState := InitElevatorState()
 	InitElevator(&elevatorState, elevatorStateCh)
 
-	var prevWorldview t.Worldview
-
 	// Periodisk ticker for fallback-bevegelse og etasjeoppdatering
 	floorTicker := time.NewTicker(200 * time.Millisecond)
 	defer floorTicker.Stop()
@@ -43,12 +41,11 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 		select {
 
 		case worldview := <-worldviewToFSMCh:
-			mergedRequests := mergeRequestsFromWorldviewTransitions(elevatorState.Requests, prevWorldview, worldview)
-			prevWorldview = worldview
+			mergedRequests := mergeRequestsFromWorldview(elevatorState.Requests, worldview)
 			requestsChanged := elevatorState.Requests != mergedRequests
 			elevatorState.Requests = mergedRequests
 
-			if requests_shouldServeCurrentFloor(elevatorState) {
+			if shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 				continue
 			}
@@ -65,7 +62,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 				doorTimer = time.After(doorOpenDuration)
 				continue
 			}
-			if requests_shouldServeCurrentFloor(elevatorState) {
+			if shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 				continue
 			}
@@ -123,28 +120,25 @@ func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
 	sendState(elevator, elevatorStateCh)
 }
 
-// mergeRequestsFromWorldviewTransitions synkroniserer FSM sine requests med worldview sine bekreftede ordrer.
-// Inkluderer alltid alle Confirmed hall-ordrer som denne heisen eier, og alle cab-ordrer.
-func mergeRequestsFromWorldviewTransitions(currentRequests [N_FLOORS][N_BUTTONS]bool, prevWorldview, newWorldview t.Worldview) [N_FLOORS][N_BUTTONS]bool {
+// mergeRequestsFromWorldview synkroniserer FSM sine requests med worldview sine bekreftede ordrer.
+// Inkluderer alle Confirmed hall-ordrer denne heisen eier, og alle cab-ordrer.
+func mergeRequestsFromWorldview(currentRequests [N_FLOORS][N_BUTTONS]bool, worldview t.Worldview) [N_FLOORS][N_BUTTONS]bool {
 	requests := currentRequests
 
-	// Hall requests: ta med alle Confirmed ordrer denne heisen eier
 	for f := 0; f < N_FLOORS; f++ {
-		upOrder := newWorldview.HallOrders[f][B_HallUp]
-		if upOrder.SyncState == t.Confirmed && upOrder.OwnerID == newWorldview.IdElevator {
+		upOrder := worldview.HallOrders[f][B_HallUp]
+		if upOrder.SyncState == t.Confirmed && upOrder.OwnerID == worldview.IdElevator {
 			requests[f][B_HallUp] = true
 		}
-
-		downOrder := newWorldview.HallOrders[f][B_HallDown]
-		if downOrder.SyncState == t.Confirmed && downOrder.OwnerID == newWorldview.IdElevator {
+		downOrder := worldview.HallOrders[f][B_HallDown]
+		if downOrder.SyncState == t.Confirmed && downOrder.OwnerID == worldview.IdElevator {
 			requests[f][B_HallDown] = true
 		}
 	}
 
-	// Cab requests: always include if they exist in AllCabOrders
-	if newWorldview.AllCabOrders != nil {
+	if worldview.AllCabOrders != nil {
 		for f := 0; f < N_FLOORS; f++ {
-			if newWorldview.AllCabOrders[newWorldview.IdElevator][f] {
+			if worldview.AllCabOrders[worldview.IdElevator][f] {
 				requests[f][B_Cab] = true
 			}
 		}
@@ -155,7 +149,7 @@ func mergeRequestsFromWorldviewTransitions(currentRequests [N_FLOORS][N_BUTTONS]
 
 // executeMovementPlan velger retning og utfører enten døråpning eller bevegelse.
 func executeMovementPlan(e ElevatorState, ch chan ElevatorState) (ElevatorState, <-chan time.Time) {
-	db := requests_chooseDirection(e)
+	db := chooseDirection(e)
 	if db.ElevatorBehaviour == EB_DoorOpen {
 		return openDoorAndClearCurrentFloor(e, ch)
 	}
@@ -184,7 +178,7 @@ func applyDecision(db DirnBehaviourPair, elevatorState *ElevatorState, elevatorS
 // clearFloorRequests åpner døren og fjerner ordrer hvis heisen er på en etasje med aktive ordrer.
 // GetFloor() != -1 forhindrer clearing når heisen er mellom etasjer.
 func clearFloorRequests(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time) {
-	if requests_shouldServeCurrentFloor(elevatorState) && elevio.GetFloor() != -1 && !elevatorState.Error {
+	if shouldServeCurrentFloor(elevatorState) && elevio.GetFloor() != -1 && !elevatorState.Error {
 		return openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 	}
 	return elevatorState, nil
@@ -192,7 +186,7 @@ func clearFloorRequests(elevatorState ElevatorState, elevatorStateCh chan Elevat
 
 func openDoorAndClearCurrentFloor(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time) {
 	elevio.SetMotorDirection(elevio.MD_Stop)
-	elevatorState = requests_clearAtCurrentFloor(elevatorState)
+	elevatorState = clearAtCurrentFloor(elevatorState)
 	elevatorState.Behaviour = EB_DoorOpen
 	elevio.SetDoorOpenLamp(true)
 	sendState(&elevatorState, elevatorStateCh)
@@ -201,7 +195,7 @@ func openDoorAndClearCurrentFloor(elevatorState ElevatorState, elevatorStateCh c
 }
 
 func elevatorCanMove(e ElevatorState) bool {
-	return e.Behaviour != EB_DoorOpen && !e.Error && requests_checkForRequests(e) && elevio.GetFloor() != -1
+	return e.Behaviour != EB_DoorOpen && !e.Error && hasAnyRequests(e) && elevio.GetFloor() != -1
 }
 
 func resetTimer(t *time.Timer, d time.Duration) {

@@ -10,6 +10,7 @@ import (
 
 const N_FLOORS = 4
 const N_BUTTONS = 3
+const N_DIRECTIONS = 2
 
 type Button int
 

@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	Directions = 2
-	NumFloors  = 4
+	Directions = t.N_DIRECTIONS
+	NumFloors  = t.N_FLOORS
 )
 
 // Spesielle OwnerID-verdier brukt i synkroniseringsprotokollen
@@ -31,37 +31,29 @@ type Order = t.Order
 
 type HallOrders = t.HallOrders
 
-// Worldview is now imported from types
 type Worldview = t.Worldview
 
-func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Worldview) Worldview {
+func worldviewInit(myID string, myWorldview Worldview, networkToInitCh <-chan Worldview) Worldview {
 	myWv := myWorldview
 	timeout := time.After(1 * time.Second)
 	for {
 		select {
-		// Hvis den får andre worldvies
 		case incomingWv := <-networkToInitCh:
-			//Ignorerer seg selv
-			if incomingWv.IdElevator == myId {
+			if incomingWv.IdElevator == myID {
 				continue
 			}
-
-			// Dyp kopi av cab orders (map-tilordning kopierer bare pekeren) Endret til deep copy
+			// Dyp kopi: map-tilordning kopierer bare referansen
 			myWv.AllCabOrders = make(map[string][NumFloors]bool, len(incomingWv.AllCabOrders))
 			for id, orders := range incomingWv.AllCabOrders {
 				myWv.AllCabOrders[id] = orders
 			}
 			myWv.HallOrders = incomingWv.HallOrders
+			return myWv
 
-			return myWv // ferdig init
-
-		// Hvis de ikke får noe fra andre
 		case <-timeout:
 			return myWv
 		}
-
 	}
-
 }
 
 // _____________________________________________________________________________
