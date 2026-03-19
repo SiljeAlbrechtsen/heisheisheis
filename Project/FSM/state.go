@@ -60,61 +60,6 @@ func updateFloor(floor int, elevatorState *ElevatorState, elevatorStateCh chan E
 	sendState(elevatorState, elevatorStateCh)
 }
 
-// A-Tar i mot retning og oppdaterer state+channel til wv
-func updateDirection(direction Direction, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	if elevatorState.Dirn == direction {
-		return
-	}
-	elevatorState.Dirn = direction
-	elevio.SetMotorDirection(elevio.MotorDirection(direction)) //A-TO DO: Sjekk om det trenges type konvertering og heller endre elevio sin type til å bruke vår Direction type
-	sendState(elevatorState, elevatorStateCh)
-}
-
-func updateBehaviour(behaviour Behaviour, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	if elevatorState.Behaviour == behaviour {
-		return
-	}
-	if behaviour == EB_DoorOpen {
-		elevio.SetDoorOpenLamp(true)
-	} else {
-		elevio.SetDoorOpenLamp(false)
-	}
-	elevatorState.Behaviour = behaviour
-	sendState(elevatorState, elevatorStateCh)
-}
-
-func updateRequests(requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	if elevatorState.Requests == requests {
-		return
-	}
-	elevatorState.Requests = requests
-	sendState(elevatorState, elevatorStateCh)
-}
-
-func updateBehaviourAndRequests(behaviour Behaviour, requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	changed := false
-
-	if behaviour == EB_DoorOpen {  //TODO Sjekk om man må ha behaviour, eller sette open door explecit
-		elevio.SetDoorOpenLamp(true)
-	} else {
-		elevio.SetDoorOpenLamp(false)
-	}
-	if elevatorState.Behaviour != behaviour {
-		elevatorState.Behaviour = behaviour
-		changed = true
-	}
-
-	if elevatorState.Requests != requests {
-		elevatorState.Requests = requests
-		changed = true
-	}
-
-	if changed {
-		sendState(elevatorState, elevatorStateCh)
-		fmt.Printf("\n***\n%+v\n***\n", *elevatorState)
-	}
-}
-
 func updateErrorState(errorState bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) bool{
 	if elevatorState.Error == errorState {
 		return elevatorState.Error

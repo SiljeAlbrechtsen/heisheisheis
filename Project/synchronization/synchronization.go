@@ -1,8 +1,9 @@
 package synchronization
 
 import (
-	wv "Project/worldview"
 	"fmt"
+
+	wv "Project/worldview"
 )
 
 func syncStateName(s wv.OrderSyncState) string {
@@ -41,36 +42,59 @@ func dirName(d int) string {
 
 func nextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 	switch currentSyncState {
-
 	case wv.None:
 		return wv.Unconfirmed
-
 	case wv.Unconfirmed:
 		return wv.Confirmed
-
 	case wv.Confirmed:
 		return wv.DeleteProposed
-
 	case wv.DeleteProposed:
 		return wv.None
-
 	default:
 		return wv.None
 	}
 }
 
-func SecondToNextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
-	switch currentSyncState {
+func canAdvanceUnconfirmedByConsensus(latestWorldviews map[string]wv.Worldview, myID string, floor, dir int) bool {
+	allAgree := true
+	seenByOtherPeer := false
 
-	case wv.None:
-		return wv.Confirmed
-
-	case wv.Unconfirmed:
-		return wv.DeleteProposed
-
-	default:
-		return wv.None
+	for id, peer := range latestWorldviews {
+		if peer.Dead {
+			continue
+		}
+		peerState := peer.HallOrders[floor][dir].SyncState
+		if peerState != wv.Unconfirmed && peerState != wv.Confirmed {
+			allAgree = false
+			break
+		}
+		if id != myID && peerState == wv.Unconfirmed {
+			seenByOtherPeer = true
+		}
 	}
+
+	return allAgree && seenByOtherPeer
+}
+
+func canAdvanceDeleteByConsensus(latestWorldviews map[string]wv.Worldview, myID string, floor, dir int) bool {
+	allAgree := true
+	seenByOtherPeer := false
+
+	for id, peer := range latestWorldviews {
+		if peer.Dead {
+			continue
+		}
+		peerState := peer.HallOrders[floor][dir].SyncState
+		if peerState != wv.DeleteProposed && peerState != wv.None {
+			allAgree = false
+			break
+		}
+		if id != myID && peerState == wv.DeleteProposed {
+			seenByOtherPeer = true
+		}
+	}
+
+	return allAgree && seenByOtherPeer
 }
 
 // Trigges når vi får inn nye worldviews. Synkroniserer hall orders og sender på channel når lys skal skrus på/av.
@@ -80,7 +104,6 @@ func syncHallOrders(
 ) wv.HallOrders {
 	myHallOrders := latestWorldviews[myID].HallOrders
 
-	// Logg hvem vi synkroniserer med
 	peerList := ""
 	for id, peer := range latestWorldviews {
 		if peer.ErrorState {
@@ -89,9 +112,9 @@ func syncHallOrders(
 			peerList += id + " "
 		}
 	}
-	//fmt.Printf("[Sync] Starter synk for %s | peers: %s\n", myID, peerList)
+	_ = peerList
 
-	// Steg 1: Følg peers som er ett steg foran (hopp kun over Dead, ikke ErrorState)
+	// Steg 1: Følg peers som er nøyaktig ett steg foran. Ingen hopp over mellomstater.
 	for _, peer := range latestWorldviews {
 		if peer.Dead {
 			continue
@@ -103,45 +126,27 @@ func syncHallOrders(
 
 				if myCurrentOrder == peerCurrentOrder {
 					continue
-
-				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
-					//fmt.Printf("[Sync][Steg1] Følger %s: floor=%d dir=%s %s->%s\n",
-					//	peer.IdElevator, f, dirName(d),
-					//	syncStateName(myCurrentOrder.SyncState),
-					//	syncStateName(peerCurrentOrder.SyncState))
-					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
 				}
-				if SecondToNextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
+
+				if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
 					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
+					if peerCurrentOrder.SyncState == wv.None {
+						myHallOrders[f][d].OwnerID = wv.NoOwner
+					}
 				}
 			}
 		}
 	}
 
-	// Steg 2: Konsensussjekk — avanser state hvis alle er enige
+	// Steg 2: Konsensus krever at alle levende peers er i tillatt del av syklusen
+	// og at minst én annen peer faktisk har observert forslaget.
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
 			myOrder := myHallOrders[f][d]
 
 			switch myOrder.SyncState {
-
 			case wv.Unconfirmed:
-				allAgree := true
-				for _, peer := range latestWorldviews {
-					if peer.Dead {
-						continue
-					}
-					peerState := peer.HallOrders[f][d].SyncState
-					if peerState != wv.Unconfirmed && peerState != wv.Confirmed {
-						//fmt.Printf("[Sync][Steg2] Ikke konsensus Unconfirmed: floor=%d dir=%s peer=%s er %s\n",
-						//	f, dirName(d), peer.IdElevator,
-						//	syncStateName(peerState))
-						allAgree = false
-						break
-					}
-				}
-				if allAgree {
-					//fmt.Printf("[Sync][Steg2] Konsensus! Unconfirmed->Confirmed floor=%d dir=%s\n", f, dirName(d))
+				if canAdvanceUnconfirmedByConsensus(latestWorldviews, myID, f, d) {
 					myHallOrders[f][d].SyncState = wv.Confirmed
 					if myHallOrders[f][d].OwnerID == wv.PeerDied {
 						myHallOrders[f][d].OwnerID = wv.NoOwner
@@ -149,21 +154,7 @@ func syncHallOrders(
 				}
 
 			case wv.DeleteProposed:
-				allAgree := true
-				for _, peer := range latestWorldviews {
-					if peer.Dead {
-						continue
-					}
-					peerState := peer.HallOrders[f][d].SyncState
-
-					if peerState != wv.DeleteProposed && peerState != wv.None {
-						allAgree = false
-						//fmt.Printf("[Sync][Steg2] DeleteProposed blokkert: floor=%d dir=%s peer=%s er %s\n", f, dirName(d), peer.IdElevator, syncStateName(peerState))
-						break
-					}
-				}
-				if allAgree {
-					//fmt.Printf("[Sync][Steg2] Konsensus! DeleteProposed->None floor=%d dir=%s\n", f, dirName(d))
+				if canAdvanceDeleteByConsensus(latestWorldviews, myID, f, d) {
 					myHallOrders[f][d] = wv.Order{SyncState: wv.None, OwnerID: wv.NoOwner}
 				}
 			}

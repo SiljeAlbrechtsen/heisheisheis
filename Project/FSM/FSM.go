@@ -6,17 +6,14 @@ import (
 
 	elevio "Project/Driver"
 	hardware "Project/Hardware"
-	t "Project/types"
 )
 
-func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState, printHallOrdersReqCh chan bool) {
+func FSM3(worldviewToFSMCh chan [N_FLOORS][N_BUTTONS]bool, elevatorStateCh chan ElevatorState, printHallOrdersReqCh chan bool) {
 
 	obstruct := false
 
 	elevatorState := InitElevatorState()
 	InitElevator(&elevatorState, elevatorStateCh)
-
-	var prevWorldview t.Worldview // Track previous worldview to detect Unconfirmed->Confirmed transitions
 
 	// Cab-lys ticker — kun for periodisk oppdatering av cab-lys
 	floorTicker := time.NewTicker(500 * time.Millisecond)
@@ -41,11 +38,9 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 	for {
 		select {
 
-		case worldview := <-worldviewToFSMCh:
-			mergedRequests := mergeRequestsFromWorldviewTransitions(elevatorState.Requests, prevWorldview, worldview)
-			prevWorldview = worldview
-			requestsChanged := elevatorState.Requests != mergedRequests
-			elevatorState.Requests = mergedRequests
+		case requestsFromWorldview := <-worldviewToFSMCh:
+			requestsChanged := elevatorState.Requests != requestsFromWorldview
+			elevatorState.Requests = requestsFromWorldview
 
 			fmt.Printf("[FSM] Worldview mottatt. Floor=%d Behaviour=%d Requests=%v\n",
 				elevatorState.Floor, elevatorState.Behaviour, elevatorState.Requests)
@@ -56,19 +51,13 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 				continue
 			}
 			if elevatorCanMove(elevatorState) {
-				db := requests_chooseDirection(elevatorState)
-				if db.ElevatorBehaviour == EB_DoorOpen {
-					elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-				} else {
-					applyDecision(db, &elevatorState, elevatorStateCh)
-				}
+				elevatorState, doorTimer = executeNextAction(elevatorState, elevatorStateCh)
 			} else if requestsChanged {
 				sendState(&elevatorState, elevatorStateCh)
 			}
 
 		case <-doorTimer:
 			doorTimer = nil
-			// Hold døren åpen så lenge obstruction er aktiv eller heisen er i error
 			if obstruct || elevatorState.Error {
 				doorTimer = time.After(3000 * time.Millisecond)
 				continue
@@ -77,26 +66,15 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 				continue
 			}
-			db := requests_chooseDirection(elevatorState)
-			if db.ElevatorBehaviour == EB_DoorOpen {
-				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-			} else {
-				applyDecision(db, &elevatorState, elevatorStateCh)
-			}
+			elevatorState, doorTimer = executeNextAction(elevatorState, elevatorStateCh)
 
 		case <-floorTicker.C:
 			if !(obstruct && elevatorState.Behaviour == EB_DoorOpen) && elevio.GetFloor() != -1 {
 				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
 				resetTimer(errorTimer, 5*time.Second)
 			}
-			// Fallback: start bevegelse hvis heisen har bestillinger men ikke beveger seg
 			if elevatorCanMove(elevatorState) {
-				db := requests_chooseDirection(elevatorState)
-				if db.ElevatorBehaviour == EB_DoorOpen {
-					elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-				} else {
-					applyDecision(db, &elevatorState, elevatorStateCh)
-				}
+				elevatorState, doorTimer = executeNextAction(elevatorState, elevatorStateCh)
 			}
 
 		case floor := <-floorSensorCh:
@@ -106,12 +84,7 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 				elevatorState, doorTimer = clearFloorRequests(elevatorState, elevatorStateCh)
 			}
 			if elevatorCanMove(elevatorState) {
-				db := requests_chooseDirection(elevatorState)
-				if db.ElevatorBehaviour == EB_DoorOpen {
-					elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-				} else {
-					applyDecision(db, &elevatorState, elevatorStateCh)
-				}
+				elevatorState, doorTimer = executeNextAction(elevatorState, elevatorStateCh)
 			}
 
 		case <-stopBtnCh:
@@ -150,55 +123,13 @@ func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
 	sendState(elevator, elevatorStateCh)
 }
 
-// Helper functions for FSM3
-
-// mergeRequestsFromWorldview syncs FSM's requests with worldview's confirmed orders
-// Always includes all Confirmed hall orders FSM owns, and all cab orders
-func mergeRequestsFromWorldviewTransitions(currentRequests [N_FLOORS][N_BUTTONS]bool, prevWorldview, newWorldview t.Worldview) [N_FLOORS][N_BUTTONS]bool {
-	requests := currentRequests
-
-	// Hall requests: include ALL Confirmed orders owned by this elevator
-	for f := 0; f < N_FLOORS; f++ {
-		upOrder := newWorldview.HallOrders[f][B_HallUp]
-		if upOrder.SyncState == t.Confirmed && upOrder.OwnerID == newWorldview.IdElevator {
-			if !requests[f][B_HallUp] {
-				fmt.Printf("[FSM] Merge: legger til HallUp floor=%d (state=%d owner=%q myID=%q)\n",
-					f, upOrder.SyncState, upOrder.OwnerID, newWorldview.IdElevator)
-			}
-			requests[f][B_HallUp] = true
-		}
-
-		downOrder := newWorldview.HallOrders[f][B_HallDown]
-		if downOrder.SyncState == t.Confirmed && downOrder.OwnerID == newWorldview.IdElevator {
-			if !requests[f][B_HallDown] {
-				fmt.Printf("[FSM] Merge: legger til HallDown floor=%d (state=%d owner=%q myID=%q)\n",
-					f, downOrder.SyncState, downOrder.OwnerID, newWorldview.IdElevator)
-			}
-			requests[f][B_HallDown] = true
-		}
+func executeNextAction(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time) {
+	db := requests_chooseDirection(elevatorState)
+	if db.ElevatorBehaviour == EB_DoorOpen {
+		return openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 	}
-
-	// Cab requests: always include if they exist in AllCabOrders
-	if newWorldview.AllCabOrders != nil {
-		for f := 0; f < N_FLOORS; f++ {
-			if newWorldview.AllCabOrders[newWorldview.IdElevator][f] {
-				requests[f][B_Cab] = true
-			}
-		}
-	}
-
-	return requests
-}
-
-func updateElevatorRequests(elevatorState ElevatorState, newRequests [4][3]bool) ElevatorState {
-	for f := 0; f < N_FLOORS; f++ {
-		for b := 0; b < N_BUTTONS; b++ {
-			if newRequests[f][b] {
-				elevatorState.Requests[f][b] = true
-			}
-		}
-	}
-	return elevatorState
+	applyDecision(db, &elevatorState, elevatorStateCh)
+	return elevatorState, nil
 }
 
 func applyDecision(db DirnBehaviourPair, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {

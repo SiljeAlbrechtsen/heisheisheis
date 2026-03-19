@@ -11,8 +11,33 @@ import (
 
 //TODO
 /*
-Teste mergingen
-Legge til timer på obstruction
+Problemet:
+- Når heis får inn hall order i samme etasje som den står i på samme heis. Så setter den ordren til deleteProposed etter oppdatering
+fra FSM, men da har den ikke rukket å synkronisere enda og derfor står det at den som confirmed og none samtidig på to ulike heiser.
+Hmm hvordan løse? Kan ikke tillate hopp fra confirmed til none.
+- Har en confirmed ordre i egen worldview som vi skal ta, men i FSM så er den false i requests.
+
+
+Endret kodekvalitet:
+  FSM.go
+
+  - Ny executeNextAction — erstatter 4 identiske chooseDirection → openDoor/applyDecision-blokker
+  - Fjernet updateElevatorRequests — var ubrukt
+
+  state.go
+
+  - Fjernet 4 ubrukte funksjoner: updateDirection, updateBehaviour, updateRequests,
+  updateBehaviourAndRequests
+
+  worldview.go
+
+  - deepCopyWorldviews — ekstrahert fra closure til pakke-funksjon
+  - sendLatestWorldview og sendLatestWorldviewMap — erstatter 5 identiske closures (sendLatestLights,
+  sendLatestWorldviewToFSM, sendLatestToNetwork, sendLatestToSync, sendLatestToAssigner)
+  - Fjernet utkommentert debug-kode
+
+
+
 Lage logikk for når en heis kommer tilbake etter mistet internett. Kopiere bare hall orders. Hvordan skal den gjøre det?
 
 */
@@ -48,6 +73,61 @@ type HallOrders = t.HallOrders
 
 // Worldview is now imported from types
 type Worldview = t.Worldview
+
+// deepCopyWorldviews creates a deep copy of the worldview map to avoid shared references
+func deepCopyWorldviews(m map[string]Worldview) map[string]Worldview {
+	c := make(map[string]Worldview, len(m))
+	for k, v := range m {
+		if v.AllCabOrders != nil {
+			newAllCabOrders := make(map[string][NumFloors]bool, len(v.AllCabOrders))
+			for id, orders := range v.AllCabOrders {
+				newAllCabOrders[id] = orders
+			}
+			v.AllCabOrders = newAllCabOrders
+		}
+		c[k] = v
+	}
+	return c
+}
+
+// sendLatestWorldview sends the latest value on a buffered channel, dropping old value if full
+func sendLatestWorldview(ch chan Worldview, value Worldview) {
+	select {
+	case ch <- value:
+	default:
+		select {
+		case <-ch:
+		default:
+		}
+		ch <- value
+	}
+}
+
+// sendLatestWorldviewMap sends the latest worldview map on a buffered channel, dropping old value if full
+func sendLatestWorldviewMap(ch chan map[string]Worldview, value map[string]Worldview) {
+	select {
+	case ch <- value:
+	default:
+		select {
+		case <-ch:
+		default:
+		}
+		ch <- value
+	}
+}
+
+// sendLatestFSMRequests sends the latest request snapshot to FSM, dropping stale values if full.
+func sendLatestFSMRequests(ch chan [NumFloors][3]bool, value [NumFloors][3]bool) {
+	select {
+	case ch <- value:
+	default:
+		select {
+		case <-ch:
+		default:
+		}
+		ch <- value
+	}
+}
 
 func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Worldview) Worldview {
 	myWv := myWorldview
@@ -208,8 +288,10 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 	// Case 1: FSM er DoorOpen nå (normal case - sjekk nåværende etasje)
 	// Case 2: FSM VAR DoorOpen og har akkurat lukket døren (fanger opp missed clears)
 	checkFloor := -1
+	justOpenedDoor := false
 	if inputStateElevator.Behaviour == fsm.EB_DoorOpen {
 		checkFloor = floor
+		justOpenedDoor = prevState.Behaviour != fsm.EB_DoorOpen
 	} else if prevState.Behaviour == fsm.EB_DoorOpen {
 		checkFloor = prevState.Floor
 	}
@@ -221,7 +303,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 	upOrder := wv.HallOrders[checkFloor][fsm.B_HallUp]
 	if upOrder.SyncState == Confirmed &&
 		!inputStateElevator.Requests[checkFloor][fsm.B_HallUp] &&
-		(prevState.Requests[checkFloor][fsm.B_HallUp] || upOrder.OwnerID == myID) {
+		(prevState.Requests[checkFloor][fsm.B_HallUp] || (justOpenedDoor && upOrder.OwnerID == myID)) {
 		fmt.Printf("[WV] DeleteProposed: floor=%d dir=Up (prevReq=%v, owner=%q, myID=%q)\n",
 			checkFloor, prevState.Requests[checkFloor][fsm.B_HallUp], upOrder.OwnerID, myID)
 		upOrder.SyncState = DeleteProposed
@@ -231,7 +313,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 	downOrder := wv.HallOrders[checkFloor][fsm.B_HallDown]
 	if downOrder.SyncState == Confirmed &&
 		!inputStateElevator.Requests[checkFloor][fsm.B_HallDown] &&
-		(prevState.Requests[checkFloor][fsm.B_HallDown] || downOrder.OwnerID == myID) {
+		(prevState.Requests[checkFloor][fsm.B_HallDown] && downOrder.OwnerID == myID) {
 		fmt.Printf("[WV] DeleteProposed: floor=%d dir=Down (prevReq=%v, owner=%q, myID=%q)\n",
 			checkFloor, prevState.Requests[checkFloor][fsm.B_HallDown], downOrder.OwnerID, myID)
 		downOrder.SyncState = DeleteProposed
@@ -314,6 +396,31 @@ func DebugPrintAllCabOrders(context string, allCabOrders map[string][NumFloors]b
 	}
 }
 
+func buildFSMRequestsSnapshot(worldview Worldview, myID string) [NumFloors][3]bool {
+	var requests [NumFloors][3]bool
+
+	for floor := 0; floor < NumFloors; floor++ {
+		upOrder := worldview.HallOrders[floor][fsm.B_HallUp]
+		if upOrder.SyncState == Confirmed && upOrder.OwnerID == myID {
+			requests[floor][fsm.B_HallUp] = true
+		}
+
+		downOrder := worldview.HallOrders[floor][fsm.B_HallDown]
+		if downOrder.SyncState == Confirmed && downOrder.OwnerID == myID {
+			requests[floor][fsm.B_HallDown] = true
+		}
+	}
+
+	if worldview.AllCabOrders != nil {
+		cabOrders := worldview.AllCabOrders[myID]
+		for floor := 0; floor < NumFloors; floor++ {
+			requests[floor][fsm.B_Cab] = cabOrders[floor]
+		}
+	}
+
+	return requests
+}
+
 func debugPrintHallOrders(context string, hallOrders HallOrders) {
 	fmt.Printf("\n[Worldview] Hallorders %s\n", context)
 	for floor := NumFloors - 1; floor >= 0; floor-- {
@@ -344,7 +451,7 @@ func GoroutineForWorldview(
 	worldviewToAssignerCh chan map[string]Worldview,
 	worldviewToSyncCh chan map[string]Worldview,
 	worldviewToNetworkCh chan Worldview,
-	worldviewToFSMCh chan Worldview, //TODO
+	worldviewToFSMCh chan [NumFloors][3]bool,
 ) {
 
 	worldviewsMap := make(map[string]Worldview)
@@ -355,80 +462,14 @@ func GoroutineForWorldview(
 	myWorldview.AllCabOrders[myID] = [NumFloors]bool{}
 	myWorldview = worldviewInit(myID, myWorldview, networkToInitCh)
 	worldviewsMap[myID] = myWorldview
+	lastFSMRequests := buildFSMRequestsSnapshot(myWorldview, myID)
+	sendLatestFSMRequests(worldviewToFSMCh, lastFSMRequests)
 
-	copyMap := func(m map[string]Worldview) map[string]Worldview {
-		c := make(map[string]Worldview, len(m))
-		for k, v := range m {
-			if v.AllCabOrders != nil {
-				newAllCabOrders := make(map[string][NumFloors]bool, len(v.AllCabOrders))
-				for id, orders := range v.AllCabOrders {
-					newAllCabOrders[id] = orders
-				}
-				v.AllCabOrders = newAllCabOrders
-			}
-			c[k] = v
-		}
-		return c
-	}
-
-	sendLatestLights := func() {
-		wv := copyMap(worldviewsMap)[myID]
-		select {
-		case lightsCh <- wv:
-		default:
-			select {
-			case <-lightsCh:
-			default:
-			}
-			lightsCh <- wv
-		}
-	}
-
-	sendLatestWorldviewToFSM := func(worldview Worldview) {
-		select {
-		case worldviewToFSMCh <- worldview:
-		default:
-			select {
-			case <-worldviewToFSMCh:
-			default:
-			}
-			worldviewToFSMCh <- worldview
-		}
-	}
-
-	sendLatestToNetwork := func(worldview Worldview) {
-		select {
-		case worldviewToNetworkCh <- worldview:
-		default:
-			select {
-			case <-worldviewToNetworkCh:
-			default:
-			}
-			worldviewToNetworkCh <- worldview
-		}
-	}
-
-	sendLatestToSync := func(worldviews map[string]Worldview) {
-		select {
-		case worldviewToSyncCh <- worldviews:
-		default:
-			select {
-			case <-worldviewToSyncCh:
-			default:
-			}
-			worldviewToSyncCh <- worldviews
-		}
-	}
-
-	sendLatestToAssigner := func(worldviews map[string]Worldview) {
-		select {
-		case worldviewToAssignerCh <- worldviews:
-		default:
-			select {
-			case <-worldviewToAssignerCh:
-			default:
-			}
-			worldviewToAssignerCh <- worldviews
+	publishFSMRequestsIfChanged := func(wv Worldview) {
+		requests := buildFSMRequestsSnapshot(wv, myID)
+		if requests != lastFSMRequests {
+			sendLatestFSMRequests(worldviewToFSMCh, requests)
+			lastFSMRequests = requests
 		}
 	}
 
@@ -449,16 +490,18 @@ func GoroutineForWorldview(
 			}
 
 			worldviewsMap[myID] = myWorldview
-			sendLatestLights()
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+			sendLatestWorldview(lightsCh, deepCopyWorldviews(worldviewsMap)[myID])
+			sendLatestWorldview(worldviewToNetworkCh, deepCopyWorldviews(worldviewsMap)[myID])
+			sendLatestWorldviewMap(worldviewToSyncCh, deepCopyWorldviews(worldviewsMap))
+			publishFSMRequestsIfChanged(myWorldview)
 
 		case inputSyncedHallOrders := <-syncToWorldviewCh:
 			worldviewsMap = updateWorldviewFromSync(worldviewsMap, inputSyncedHallOrders, myID)
 			myWorldview = worldviewsMap[myID]
-			sendLatestToAssigner(copyMap(worldviewsMap))
-			sendLatestLights()
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
+			sendLatestWorldviewMap(worldviewToAssignerCh, deepCopyWorldviews(worldviewsMap))
+			sendLatestWorldview(lightsCh, deepCopyWorldviews(worldviewsMap)[myID])
+			sendLatestWorldview(worldviewToNetworkCh, deepCopyWorldviews(worldviewsMap)[myID])
+			publishFSMRequestsIfChanged(myWorldview)
 
 		case inputPeerWorldview := <-networkToWorldviewCh:
 			if inputPeerWorldview.IdElevator == myID {
@@ -477,9 +520,9 @@ func GoroutineForWorldview(
 			}
 
 			worldviewsMap[myID] = myWorldview
-			//DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+			sendLatestWorldview(worldviewToNetworkCh, deepCopyWorldviews(worldviewsMap)[myID])
+			sendLatestWorldviewMap(worldviewToSyncCh, deepCopyWorldviews(worldviewsMap))
+			publishFSMRequestsIfChanged(myWorldview)
 
 		case newPeer := <-newPeerIdCh:
 			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeer)
@@ -488,26 +531,28 @@ func GoroutineForWorldview(
 			//fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeer)
 			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
 			myWorldview = worldviewsMap[myID]
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+			sendLatestWorldview(worldviewToNetworkCh, deepCopyWorldviews(worldviewsMap)[myID])
+			sendLatestWorldviewMap(worldviewToSyncCh, deepCopyWorldviews(worldviewsMap))
+			publishFSMRequestsIfChanged(myWorldview)
 
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = worldviewsMap[myID]
 			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
 			worldviewsMap[myID] = myWorldview
-			sendLatestLights()
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+			sendLatestWorldview(lightsCh, deepCopyWorldviews(worldviewsMap)[myID])
+			sendLatestWorldview(worldviewToNetworkCh, deepCopyWorldviews(worldviewsMap)[myID])
+			sendLatestWorldviewMap(worldviewToSyncCh, deepCopyWorldviews(worldviewsMap))
+			publishFSMRequestsIfChanged(myWorldview)
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = worldviewsMap[myID]
 			myWorldview = addNewCabOrder(myWorldview, inputCabBtn, myID)
 
 			worldviewsMap[myID] = myWorldview
-			//DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
-			sendLatestLights()
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+			sendLatestWorldview(lightsCh, deepCopyWorldviews(worldviewsMap)[myID])
+			sendLatestWorldview(worldviewToNetworkCh, deepCopyWorldviews(worldviewsMap)[myID])
+			sendLatestWorldviewMap(worldviewToSyncCh, deepCopyWorldviews(worldviewsMap))
+			publishFSMRequestsIfChanged(myWorldview)
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview = worldviewsMap[myID]
@@ -516,9 +561,9 @@ func GoroutineForWorldview(
 			debugPrintHallOrders("after assignment", myWorldview.HallOrders) // TO DO: FJERN
 
 			worldviewsMap[myID] = myWorldview
-			sendLatestLights()
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestWorldviewToFSM(copyMap(worldviewsMap)[myID])
+			sendLatestWorldview(lightsCh, deepCopyWorldviews(worldviewsMap)[myID])
+			sendLatestWorldview(worldviewToNetworkCh, deepCopyWorldviews(worldviewsMap)[myID])
+			publishFSMRequestsIfChanged(myWorldview)
 
 		case <-printHallOrdersReqCh:
 			myWorldview = worldviewsMap[myID]
