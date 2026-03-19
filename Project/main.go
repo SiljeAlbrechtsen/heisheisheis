@@ -7,14 +7,13 @@ import (
 	"Project/Network/setup"
 	assign "Project/assignment"
 	sync "Project/synchronization"
-	t "Project/types"
 	wv "Project/worldview"
 
 	"fmt"
 )
 
 func main() {
-	addr := t.ResolveElevatorAddr()
+	addr := setup.ResolveElevatorAddr()
 	elevio.Init(addr, 4)
 
 	// `go run main.go -id=our_id`

@@ -1,12 +1,5 @@
 package types
 
-import (
-	"net"
-	"os"
-	"os/exec"
-	"strings"
-	"time"
-)
 
 const N_FLOORS = 4
 const N_BUTTONS = 3
@@ -70,32 +63,3 @@ type Worldview struct {
 	Dead         bool // Settes ved nettverkstap
 }
 
-func InitElevatorState() ElevatorState {
-	return ElevatorState{
-		Floor:     -1,
-		Dirn:      D_Stop,
-		Behaviour: EB_Idle,
-		Error:     false,
-	}
-}
-
-func ResolveElevatorAddr() string {
-	if addr := strings.TrimSpace(os.Getenv("ELEVATOR_ADDR")); addr != "" {
-		return addr
-	}
-	candidates := []string{"localhost:15657"}
-	if out, err := exec.Command("sh", "-c", "ip route | awk '/default/ {print $3}'").Output(); err == nil {
-		ip := strings.TrimSpace(string(out))
-		if ip != "" {
-			candidates = append(candidates, ip+":15657")
-		}
-	}
-	for _, addr := range candidates {
-		conn, err := net.DialTimeout("tcp", addr, 300*time.Millisecond)
-		if err == nil {
-			conn.Close()
-			return addr
-		}
-	}
-	return candidates[0]
-}

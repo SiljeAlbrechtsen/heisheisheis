@@ -7,9 +7,35 @@ import (
 	wv "Project/worldview"
 	"flag"
 	"fmt"
+	"net"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 )
+
+// ResolveElevatorAddr finner adressen til heissimulator eller -hardware.
+// Leser ELEVATOR_ADDR fra miljøvariabel, ellers prober lokalt nettverk på port 15657.
+func ResolveElevatorAddr() string {
+	if addr := strings.TrimSpace(os.Getenv("ELEVATOR_ADDR")); addr != "" {
+		return addr
+	}
+	candidates := []string{"localhost:15657"}
+	if out, err := exec.Command("sh", "-c", "ip route | awk '/default/ {print $3}'").Output(); err == nil {
+		ip := strings.TrimSpace(string(out))
+		if ip != "" {
+			candidates = append(candidates, ip+":15657")
+		}
+	}
+	for _, addr := range candidates {
+		conn, err := net.DialTimeout("tcp", addr, 300*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return addr
+		}
+	}
+	return candidates[0]
+}
 
 // TransmitWorldviewPeriodically sender vår worldview periodisk på nettverket.
 // Sender alltid siste versjon hvert 100ms.

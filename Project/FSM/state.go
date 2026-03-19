@@ -26,7 +26,12 @@ const D_Stop = t.D_Stop
 const D_Up = t.D_Up
 
 func InitElevatorState() ElevatorState {
-	return t.InitElevatorState()
+	return ElevatorState{
+		Floor:     -1,
+		Dirn:      D_Stop,
+		Behaviour: EB_Idle,
+		Error:     false,
+	}
 }
 
 // sendState sender alltid siste elevatorState til worldview, og dropper eventuelle gamle verdier i kanalen.
