@@ -110,6 +110,14 @@ func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
 		return true
 	}
 
+	// PeerDied-degradering: Confirmed → Unconfirmed/peerDied er tillatt
+	// (eieren av ordren gikk i error, sync propagerer dette via Steg 0)
+	if localOrder.SyncState == Confirmed &&
+		syncOrder.SyncState == Unconfirmed &&
+		syncOrder.OwnerID == PeerDied {
+		return true
+	}
+
 	// Alt annet er stale — behold lokal tilstand
 	return false
 }
