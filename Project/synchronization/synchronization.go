@@ -138,7 +138,7 @@ func syncHallOrders(
 	}
 
 	// Steg 3: OwnerID-konflikt — hvis to alive peers er uenige om hvem som eier en Confirmed ordre,
-	// velg deterministisk vinner med leksikografisk minste OwnerID.
+	// velg deterministisk vinner med minste OwnerID.
 	// Begge heiser konvergerer uavhengig til samme eier etter én sync-runde.
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {

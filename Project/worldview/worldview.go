@@ -145,10 +145,12 @@ func updateWorldviewFromSync(worldviews map[string]Worldview, incomingOrders Hal
 				continue
 			}
 
-			// Bevar lokalt satt OwnerID når sync ikke endrer SyncState (aldri for None-ordrer)
+			// Bevar lokalt satt OwnerID kun hvis sync ikke har en konkret eier.
+			// Hvis sync har satt en konkret eier (f.eks. via konfliktløsning), bruk den.
 			if syncOrder.SyncState == localOrder.SyncState &&
 				localOrder.OwnerID != NoOwner &&
-				localOrder.SyncState != None {
+				localOrder.SyncState != None &&
+				(syncOrder.OwnerID == NoOwner || syncOrder.OwnerID == PeerDied) {
 				merged[f][d].OwnerID = localOrder.OwnerID
 			}
 		}
@@ -252,7 +254,6 @@ func updateWorldviewWithElevatorState(worldview Worldview, newState t.ElevatorSt
 	return wv
 }
 
-// updateOwnerIDsFromAssignment oppdaterer OwnerID på bekreftede hall-ordrer basert på assigner-resultatet.
 func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string][4][3]bool) HallOrders {
 	ho := hallOrders
 	for floor := 0; floor < NumFloors; floor++ {
