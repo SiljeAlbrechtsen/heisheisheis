@@ -24,6 +24,26 @@ func nextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 	}
 }
 
+func allAliveAgree(worldviews map[string]wv.Worldview, f, d int, accepted ...wv.OrderSyncState) bool {
+	for _, peer := range worldviews {
+		if peer.Dead {
+			continue
+		}
+		peerState := peer.HallOrders[f][d].SyncState
+		ok := false
+		for _, s := range accepted {
+			if peerState == s {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
 func secondToNextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 	switch currentSyncState {
 
@@ -38,7 +58,7 @@ func secondToNextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncStat
 	}
 }
 
-// Trigges når vi får inn nye worldviews. Synkroniserer hall orders og sender på channel når lys skal skrus på/av.
+// syncHallOrders synkroniserer hall orders mot alle kjente peers og returnerer oppdatert tilstand.
 func syncHallOrders(
 	latestWorldviews map[string]wv.Worldview,
 	myID string,
@@ -81,8 +101,7 @@ func syncHallOrders(
 
 				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState && myCurrentOrder.OwnerID != wv.PeerDied {
 					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
-				}
-				if secondToNextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState && myCurrentOrder.OwnerID != wv.PeerDied {
+				} else if secondToNextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState && myCurrentOrder.OwnerID != wv.PeerDied {
 					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
 				}
 			}
@@ -103,18 +122,7 @@ func syncHallOrders(
 				if latestWorldviews[myID].HallOrders[f][d].SyncState != wv.Unconfirmed {
 					break
 				}
-				allAgree := true
-				for _, peer := range latestWorldviews {
-					if peer.Dead {
-						continue
-					}
-					peerState := peer.HallOrders[f][d].SyncState
-					if peerState != wv.Unconfirmed && peerState != wv.Confirmed {
-						allAgree = false
-						break
-					}
-				}
-				if allAgree {
+				if allAliveAgree(latestWorldviews, f, d, wv.Unconfirmed, wv.Confirmed) {
 					myHallOrders[f][d].SyncState = wv.Confirmed
 					if myHallOrders[f][d].OwnerID == wv.PeerDied {
 						myHallOrders[f][d].OwnerID = wv.NoOwner
@@ -122,19 +130,7 @@ func syncHallOrders(
 				}
 
 			case wv.DeleteProposed:
-				allAgree := true
-				for _, peer := range latestWorldviews {
-					if peer.Dead {
-						continue
-					}
-					peerState := peer.HallOrders[f][d].SyncState
-
-					if peerState != wv.DeleteProposed && peerState != wv.None {
-						allAgree = false
-						break
-					}
-				}
-				if allAgree {
+				if allAliveAgree(latestWorldviews, f, d, wv.DeleteProposed, wv.None) {
 					myHallOrders[f][d] = wv.Order{SyncState: wv.None, OwnerID: wv.NoOwner}
 				}
 			}
@@ -142,7 +138,8 @@ func syncHallOrders(
 	}
 
 	// Steg 3: OwnerID-konflikt — hvis to alive peers er uenige om hvem som eier en Confirmed ordre,
-	// nullstill OwnerID slik at assigner kan tildele på nytt.
+	// velg deterministisk vinner med leksikografisk minste OwnerID.
+	// Begge heiser konvergerer uavhengig til samme eier etter én sync-runde.
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
 			myOrder := myHallOrders[f][d]
@@ -158,7 +155,9 @@ func syncHallOrders(
 					peerOrder.OwnerID != wv.NoOwner &&
 					peerOrder.OwnerID != wv.PeerDied &&
 					peerOrder.OwnerID != myOrder.OwnerID {
-					myHallOrders[f][d].OwnerID = wv.NoOwner
+					if peerOrder.OwnerID < myOrder.OwnerID {
+						myHallOrders[f][d].OwnerID = peerOrder.OwnerID
+					}
 					break
 				}
 			}
