@@ -78,12 +78,9 @@ func worldviewInit(myID string, myWorldview Worldview, initCh <-chan Worldview) 
 			if incomingWv.IdElevator == myID {
 				continue
 			}
-			// Dyp kopi: map-tilordning kopierer bare referansen
-			myWv.AllCabOrders = make(map[string][NumFloors]bool, len(incomingWv.AllCabOrders))
-			for id, orders := range incomingWv.AllCabOrders {
-				myWv.AllCabOrders[id] = orders
-			}
-			myWv.HallOrders = incomingWv.HallOrders
+			copied := copyWorldviews(map[string]Worldview{incomingWv.IdElevator: incomingWv})[incomingWv.IdElevator]
+			myWv.HallOrders = copied.HallOrders
+			myWv.AllCabOrders = copied.AllCabOrders
 			return myWv
 
 		case <-timeout:
@@ -133,17 +130,18 @@ func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
 	return false
 }
 
-func updateWorldviewFromSync(worldviews map[string]Worldview, syncedHallOrders HallOrders, myID string) map[string]Worldview {
+func updateWorldviewFromSync(worldviews map[string]Worldview, incomingOrders HallOrders, myID string) map[string]Worldview {
 	wv := worldviews[myID]
+	merged := incomingOrders // start fra incoming, overstyr avviste entries med lokal tilstand
 
 	for f := 0; f < NumFloors; f++ {
 		for d := 0; d < Directions; d++ {
 			localOrder := wv.HallOrders[f][d]
-			syncOrder := syncedHallOrders[f][d]
+			syncOrder := incomingOrders[f][d]
 
 			if !shouldAcceptSyncOrder(localOrder, syncOrder) {
 				// Stale sync-resultat — behold lokal tilstand
-				syncedHallOrders[f][d] = localOrder
+				merged[f][d] = localOrder
 				continue
 			}
 
@@ -151,18 +149,30 @@ func updateWorldviewFromSync(worldviews map[string]Worldview, syncedHallOrders H
 			if syncOrder.SyncState == localOrder.SyncState &&
 				localOrder.OwnerID != NoOwner &&
 				localOrder.SyncState != None {
-				syncedHallOrders[f][d].OwnerID = localOrder.OwnerID
+				merged[f][d].OwnerID = localOrder.OwnerID
 			}
 		}
 	}
 
-	wv.HallOrders = syncedHallOrders
+	wv.HallOrders = merged
 	worldviews[myID] = wv
 	return worldviews
 }
 
-func updatePeerWorldviewFromNetwork(worldviews map[string]Worldview, peerWv Worldview) map[string]Worldview {
+// applyPeerWorldview lagrer peerens worldview og oppdaterer egen tilstand basert på den:
+// synkroniserer cab orders og degraderer hall orders hvis peeren er i error.
+func applyPeerWorldview(worldviews map[string]Worldview, peerWv Worldview, myID string) map[string]Worldview {
 	worldviews[peerWv.IdElevator] = peerWv
+
+	wv := worldviews[myID]
+	if wv.AllCabOrders == nil {
+		wv.AllCabOrders = make(map[string][NumFloors]bool)
+	}
+	wv.AllCabOrders[peerWv.IdElevator] = peerWv.AllCabOrders[peerWv.IdElevator]
+	if peerWv.ErrorState {
+		wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, peerWv.IdElevator)
+	}
+	worldviews[myID] = wv
 	return worldviews
 }
 
@@ -184,23 +194,29 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 }
 
 // updateWorldviewWithElevatorState oppdaterer worldview med ny elevatortilstand fra FSM,
-// inkludert serverte cab-ordrer og fullførte hall-ordrer (setter DeleteProposed).
+// inkludert error-state, serverte cab-ordrer og fullførte hall-ordrer (setter DeleteProposed).
 func updateWorldviewWithElevatorState(worldview Worldview, newState t.ElevatorState, myID string) Worldview {
 	wv := worldview
 	prevState := wv.State
 	wv.State = newState
+	wv.ErrorState = newState.Error
+	if newState.Error {
+		wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, myID)
+	}
 	floor := newState.Floor
+
+	if wv.AllCabOrders == nil {
+		wv.AllCabOrders = make(map[string][NumFloors]bool)
+	}
 
 	if floor < 0 || floor >= NumFloors {
 		return wv
 	}
 
-	if wv.AllCabOrders != nil {
-		orders := wv.AllCabOrders[myID]
-		if orders[floor] {
-			orders[floor] = false
-			wv.AllCabOrders[myID] = orders
-		}
+	orders := wv.AllCabOrders[myID]
+	if orders[floor] {
+		orders[floor] = false
+		wv.AllCabOrders[myID] = orders
 	}
 
 	// Sjekk for servede hall-ordrer:
@@ -366,18 +382,7 @@ func GoroutineForWorldview(myID string, ch WorldviewChannels) {
 	for {
 		select {
 		case newState := <-ch.ElevatorState:
-			wv := worldviews[myID]
-			wv = updateWorldviewWithElevatorState(wv, newState, myID)
-			if wv.AllCabOrders == nil {
-				wv.AllCabOrders = make(map[string][NumFloors]bool)
-			}
-			if newState.Error {
-				wv.ErrorState = true
-				wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, myID)
-			} else {
-				wv.ErrorState = false
-			}
-			worldviews[myID] = wv
+			worldviews[myID] = updateWorldviewWithElevatorState(worldviews[myID], newState, myID)
 			sendLights()
 			sendToNetwork(copyWorldviews(worldviews)[myID])
 			sendToSync(copyWorldviews(worldviews))
@@ -392,16 +397,7 @@ func GoroutineForWorldview(myID string, ch WorldviewChannels) {
 			if peerWv.IdElevator == myID {
 				continue
 			}
-			worldviews = updatePeerWorldviewFromNetwork(worldviews, peerWv)
-			wv := worldviews[myID]
-			if wv.AllCabOrders == nil {
-				wv.AllCabOrders = make(map[string][NumFloors]bool)
-			}
-			wv.AllCabOrders[peerWv.IdElevator] = peerWv.AllCabOrders[peerWv.IdElevator]
-			if peerWv.ErrorState {
-				wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, peerWv.IdElevator)
-			}
-			worldviews[myID] = wv
+			worldviews = applyPeerWorldview(worldviews, peerWv, myID)
 			sendToNetwork(copyWorldviews(worldviews)[myID])
 			sendToSync(copyWorldviews(worldviews))
 
