@@ -20,8 +20,6 @@ import (
 
 //TODO Ingrid:
 //TODO gjøre at når peersAlive er tom skal den bare ta i mot cab-calls, blokke hallOrders på en måte??
-//TODO når det kommer en ny peer som har min id skal hallOrders kopieres hvis det finnes flere andre 
-//teste testeteste
 
 func main() {
 	addr := t.ResolveElevatorAddr()

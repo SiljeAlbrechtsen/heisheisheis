@@ -286,6 +286,19 @@ func debugPrintHallOrders(context string, hallOrders HallOrders) {
 	}
 }
 
+func CopyHallOrdersFromOtherPeer(myId string, worldviewsMap map[string]Worldview) HallOrders {
+	var hallOrders HallOrders
+	for id, wv := range worldviewsMap {
+		if id != myId {
+			fmt.Printf("[Worldview] Kopierer hallOrders fra peer %s\n", id)
+			hallOrders = wv.HallOrders
+			break
+		}
+	}
+
+	return hallOrders
+}
+
 func GoroutineForWorldview(
 	myID string,
 	elevatorToWorldviewCh <-chan t.ElevatorState,
@@ -316,6 +329,8 @@ func GoroutineForWorldview(
 	myWorldview.AllCabOrders[myID] = [NumFloors]bool{}
 	myWorldview = worldviewInit(myID, myWorldview, networkToInitCh)
 	worldviewsMap[myID] = myWorldview
+
+	hasNetwork := true
 
 	copyMap := func(m map[string]Worldview) map[string]Worldview {
 		c := make(map[string]Worldview, len(m))
@@ -441,25 +456,39 @@ func GoroutineForWorldview(
 			sendLatestToSync(copyMap(worldviewsMap))
 
 		case newPeerId := <-newPeerIdCh:
-			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeer)
+			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeerId)
 			if newPeerId == myID {
-				//TODO sjekke om det finnes andre og kopiere hallcalls
-
+				hasNetwork = true
 			}
 
-		case inputDeadPeer := <-lostPeerIdCh:
-			//fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeer)
-			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeer)
+			if newPeerId == myID {
+				for id, wv := range worldviewsMap {
+					if id != myID {
+						fmt.Printf("[Worldview] Kopierer hallOrders fra peer %s\n", id)
+						myWorldview.HallOrders = wv.HallOrders
+						break
+					}
+				}
+			}
+
+		case inputDeadPeerId := <-lostPeerIdCh:
+			fmt.Printf("[Worldview] Peer tapt: %s\n", inputDeadPeerId)
+			if inputDeadPeerId == myID {
+				hasNetwork = false
+			}
+			worldviewsMap = HandleLostPeer(worldviewsMap, myID, inputDeadPeerId)
 			myWorldview = worldviewsMap[myID]
 			sendLatestToSync(copyMap(worldviewsMap))
 
 		case inputHallBtn := <-hallBtnCh:
 			myWorldview = worldviewsMap[myID]
-			myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
-			worldviewsMap[myID] = myWorldview
-			sendLatestHallOrders(myWorldview.HallOrders)
-			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
-			sendLatestToSync(copyMap(worldviewsMap))
+			if hasNetwork {
+				myWorldview = addNewHallOrder(myWorldview, inputHallBtn)
+				worldviewsMap[myID] = myWorldview
+				sendLatestHallOrders(myWorldview.HallOrders)
+				sendLatestToNetwork(copyMap(worldviewsMap)[myID])
+				sendLatestToSync(copyMap(worldviewsMap))
+			}
 
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = worldviewsMap[myID]
@@ -473,9 +502,9 @@ func GoroutineForWorldview(
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview = worldviewsMap[myID]
-			debugPrintHallOrders("before assignment", myWorldview.HallOrders) // TO DO: FJERN
+			//debugPrintHallOrders("before assignment", myWorldview.HallOrders) // TO DO: FJERN
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
-			debugPrintHallOrders("after assignment", myWorldview.HallOrders) // TO DO: FJERN
+			//debugPrintHallOrders("after assignment", myWorldview.HallOrders) // TO DO: FJERN
 
 			worldviewsMap[myID] = myWorldview
 			sendLatestHallOrders(myWorldview.HallOrders)
@@ -484,7 +513,7 @@ func GoroutineForWorldview(
 
 		case <-printHallOrdersReqCh:
 			myWorldview = worldviewsMap[myID]
-			debugPrintHallOrders("stop button worldview", myWorldview.HallOrders)
+			//debugPrintHallOrders("stop button worldview", myWorldview.HallOrders)
 		}
 
 	}
