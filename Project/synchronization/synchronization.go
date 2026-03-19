@@ -141,7 +141,31 @@ func syncHallOrders(
 		}
 	}
 
-	// Steg 3: Normaliser — None-ordrer skal aldri ha owner
+	// Steg 3: OwnerID-konflikt — hvis to alive peers er uenige om hvem som eier en Confirmed ordre,
+	// nullstill OwnerID slik at assigner kan tildele på nytt.
+	for f := 0; f < wv.NumFloors; f++ {
+		for d := 0; d < wv.Directions; d++ {
+			myOrder := myHallOrders[f][d]
+			if myOrder.SyncState != wv.Confirmed || myOrder.OwnerID == wv.NoOwner || myOrder.OwnerID == wv.PeerDied {
+				continue
+			}
+			for _, peer := range latestWorldviews {
+				if peer.Dead || peer.IdElevator == myID {
+					continue
+				}
+				peerOrder := peer.HallOrders[f][d]
+				if peerOrder.SyncState == wv.Confirmed &&
+					peerOrder.OwnerID != wv.NoOwner &&
+					peerOrder.OwnerID != wv.PeerDied &&
+					peerOrder.OwnerID != myOrder.OwnerID {
+					myHallOrders[f][d].OwnerID = wv.NoOwner
+					break
+				}
+			}
+		}
+	}
+
+	// Steg 4: Normaliser — None-ordrer skal aldri ha owner
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
 			if myHallOrders[f][d].SyncState == wv.None {
