@@ -110,11 +110,11 @@ func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
 		return true
 	}
 
-	// PeerDied-degradering: Confirmed → Unconfirmed/peerDied er tillatt
+	// Peer-death degradering: Confirmed → Unconfirmed/{NoOwner|PeerDied} er tillatt
 	// (eieren av ordren gikk i error, sync propagerer dette via Steg 0)
 	if localOrder.SyncState == Confirmed &&
 		syncOrder.SyncState == Unconfirmed &&
-		syncOrder.OwnerID == PeerDied {
+		(syncOrder.OwnerID == PeerDied || syncOrder.OwnerID == NoOwner) {
 		return true
 	}
 
@@ -156,7 +156,7 @@ func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, input
 // TODO
 // funksjon som legger inn caborders/hallorders inn i din egen worldview. evt samle de sånn at vi kan bruke samme funksjon for de
 
-// Setter state fra confirmet til uncondiremd og ownerID til PeerDied, kjøres når heis dør
+// Setter aktive ordre eid av tapt peer til Unconfirmed + NoOwner, kjøres når heis dør
 func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	ho := hallOrders
 	//fmt.Printf("I markPeerDeadInHallOrders \n")
@@ -164,9 +164,9 @@ func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 		for j := range row {
 			order := ho[i][j]
 
-			if order.OwnerID == lostId && order.SyncState == Confirmed {
+			if order.OwnerID == lostId && order.SyncState != None {
 				order.SyncState = Unconfirmed
-				order.OwnerID = PeerDied
+				order.OwnerID = NoOwner
 
 			}
 			ho[i][j] = order

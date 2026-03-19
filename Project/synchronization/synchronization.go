@@ -89,11 +89,12 @@ func syncHallOrders(
 			peerList += id + " "
 		}
 	}
+	_ = peerList
 	//fmt.Printf("[Sync] Starter synk for %s | peers: %s\n", myID, peerList)
 
-	// Steg 0: Propager peerDied — hvis en alive peer har {Unconfirmed, peerDied} og vi har
-	// {Confirmed, _}, skal vi følge ned. Eieren av ordren har markert seg som dead/error,
-	// og denne infoen må spres selv om vi ikke fikk originalbroadcastet fra den feilende heisen.
+	// Steg 0: Propager peer-death degradering — hvis en alive peer har
+	// {Unconfirmed, NoOwner} og vi har {Confirmed, _}, skal vi følge ned.
+	// Dette sikrer at en ordre med død eier blir reassignbar hos alle noder.
 	for _, peer := range latestWorldviews {
 		if peer.Dead {
 			continue
@@ -102,9 +103,9 @@ func syncHallOrders(
 			for d := 0; d < wv.Directions; d++ {
 				peerOrder := peer.HallOrders[f][d]
 				if peerOrder.SyncState == wv.Unconfirmed &&
-					peerOrder.OwnerID == wv.PeerDied &&
+					peerOrder.OwnerID == wv.NoOwner &&
 					myHallOrders[f][d].SyncState == wv.Confirmed {
-					myHallOrders[f][d] = wv.Order{SyncState: wv.Unconfirmed, OwnerID: wv.PeerDied}
+					myHallOrders[f][d] = wv.Order{SyncState: wv.Unconfirmed, OwnerID: wv.NoOwner}
 				}
 			}
 		}
@@ -146,8 +147,8 @@ func syncHallOrders(
 
 			case wv.Unconfirmed:
 				// Krev at vi allerede har broadcast Unconfirmed-state før vi tillater konsensus.
-				// Hindrer at Confirmed→Unconfirmed-degradering (peerDied via Steg 0) hopper
-				// direkte til Confirmed i samme runde uten å ha fortalt andre om det.
+				// Hindrer at Confirmed→Unconfirmed-degradering hopper direkte til Confirmed
+				// i samme runde uten å ha fortalt andre om det.
 				if latestWorldviews[myID].HallOrders[f][d].SyncState != wv.Unconfirmed {
 					break
 				}
@@ -158,15 +159,11 @@ func syncHallOrders(
 					}
 					peerState := peer.HallOrders[f][d].SyncState
 					if peerState != wv.Unconfirmed && peerState != wv.Confirmed {
-						//fmt.Printf("[Sync][Steg2] Ikke konsensus Unconfirmed: floor=%d dir=%s peer=%s er %s\n",
-						//	f, dirName(d), peer.IdElevator,
-						//	syncStateName(peerState))
 						allAgree = false
 						break
 					}
 				}
 				if allAgree {
-					//fmt.Printf("[Sync][Steg2] Konsensus! Unconfirmed->Confirmed floor=%d dir=%s\n", f, dirName(d))
 					myHallOrders[f][d].SyncState = wv.Confirmed
 					if myHallOrders[f][d].OwnerID == wv.PeerDied {
 						myHallOrders[f][d].OwnerID = wv.NoOwner
@@ -183,12 +180,10 @@ func syncHallOrders(
 
 					if peerState != wv.DeleteProposed && peerState != wv.None {
 						allAgree = false
-						//fmt.Printf("[Sync][Steg2] DeleteProposed blokkert: floor=%d dir=%s peer=%s er %s\n", f, dirName(d), peer.IdElevator, syncStateName(peerState))
 						break
 					}
 				}
 				if allAgree {
-					//fmt.Printf("[Sync][Steg2] Konsensus! DeleteProposed->None floor=%d dir=%s\n", f, dirName(d))
 					myHallOrders[f][d] = wv.Order{SyncState: wv.None, OwnerID: wv.NoOwner}
 				}
 			}
@@ -200,28 +195,6 @@ func syncHallOrders(
 		for d := 0; d < wv.Directions; d++ {
 			if myHallOrders[f][d].SyncState == wv.None {
 				myHallOrders[f][d].OwnerID = wv.NoOwner
-			}
-		}
-	}
-
-	// Steg 4: Robusthet ved peer-død — Confirmed-ordrer skal aldri peke på død/error-eier.
-	for f := 0; f < wv.NumFloors; f++ {
-		for d := 0; d < wv.Directions; d++ {
-			order := myHallOrders[f][d]
-			if order.SyncState != wv.Confirmed {
-				continue
-			}
-			if order.OwnerID == wv.PeerDied {
-				order.OwnerID = wv.NoOwner
-				myHallOrders[f][d] = order
-				continue
-			}
-			if order.OwnerID == wv.NoOwner {
-				continue
-			}
-			if ownerWv, ok := latestWorldviews[order.OwnerID]; !ok || ownerWv.Dead || ownerWv.ErrorState {
-				order.OwnerID = wv.NoOwner
-				myHallOrders[f][d] = order
 			}
 		}
 	}
