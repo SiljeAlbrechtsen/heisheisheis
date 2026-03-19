@@ -222,7 +222,8 @@ func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string][
 	ho := hallOrders
 	for floor := 0; floor < NumFloors; floor++ {
 		for dir := 0; dir < Directions; dir++ {
-			if ho[floor][dir].SyncState == Confirmed {
+			if ho[floor][dir].SyncState == Confirmed &&
+				(ho[floor][dir].OwnerID == NoOwner || ho[floor][dir].OwnerID == PeerDied) {
 				for elevatorID, assigned := range assignment {
 					if assigned[floor][dir] {
 						ho[floor][dir].OwnerID = elevatorID
