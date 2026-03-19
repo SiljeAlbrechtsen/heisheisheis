@@ -170,6 +170,15 @@ func syncHallOrders(
 		}
 	}
 
+	// Steg 3: Normaliser — None-ordrer skal aldri ha owner
+	for f := 0; f < wv.NumFloors; f++ {
+		for d := 0; d < wv.Directions; d++ {
+			if myHallOrders[f][d].SyncState == wv.None {
+				myHallOrders[f][d].OwnerID = wv.NoOwner
+			}
+		}
+	}
+
 	return myHallOrders
 }
 

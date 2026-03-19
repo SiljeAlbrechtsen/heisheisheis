@@ -129,9 +129,10 @@ func updateWorldviewFromSync(latestWorldviews map[string]Worldview, inputSyncedH
 				continue
 			}
 
-			// Bevar lokalt satt OwnerID når sync ikke endrer SyncState
+			// Bevar lokalt satt OwnerID når sync ikke endrer SyncState (aldri for None-ordrer)
 			if syncOrder.SyncState == localOrder.SyncState &&
-				localOrder.OwnerID != NoOwner {
+				localOrder.OwnerID != NoOwner &&
+				localOrder.SyncState != None {
 				inputSyncedHallOrders[f][d].OwnerID = localOrder.OwnerID
 			}
 		}
