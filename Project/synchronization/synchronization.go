@@ -112,7 +112,7 @@ func syncHallOrders(
 
 	// Steg 1: Følg peers som er ett steg foran (hopp kun over Dead, ikke ErrorState)
 	for _, peer := range latestWorldviews {
-		if peer.Dead {
+		if peer.Dead || peer.IdElevator == myID {
 			continue
 		}
 		for f := 0; f < wv.NumFloors; f++ {
@@ -123,7 +123,7 @@ func syncHallOrders(
 				if myCurrentOrder == peerCurrentOrder {
 					continue
 
-				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
+				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState && peerCurrentOrder.OwnerID != wv.PeerDied {
 					//fmt.Printf("[Sync][Steg1] Følger %s: floor=%d dir=%s %s->%s\n",
 					//	peer.IdElevator, f, dirName(d),
 					//	syncStateName(myCurrentOrder.SyncState),
