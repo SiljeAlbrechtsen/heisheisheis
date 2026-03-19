@@ -77,7 +77,7 @@ func PollButtons(receiver chan<- ButtonEvent) {
 		for f := 0; f < _numFloors; f++ {
 			for b := ButtonType(0); b < 3; b++ {
 				v := GetButton(b, f)
-				if v != prev[f][b] && v != false {
+				if v != prev[f][b] && v {
 					receiver <- ButtonEvent{f, ButtonType(b)}
 				}
 				prev[f][b] = v
@@ -98,7 +98,7 @@ func PollFloorSensor(receiver chan<- int) {
 	}
 }
 
-func PollStopButton(receiver chan<- bool) { //A-For moroskyld så togler stopknappen-lyset mellom på og av hver gang den trykkes
+func PollStopButton(receiver chan<- bool) {
 	prev := false
 	light := false
 	for {
@@ -186,17 +186,12 @@ func write(in [4]byte) {
 }
 
 func toByte(a bool) byte {
-	var b byte = 0
 	if a {
-		b = 1
+		return 1
 	}
-	return b
+	return 0
 }
 
 func toBool(a byte) bool {
-	var b bool = false
-	if a != 0 {
-		b = true
-	}
-	return b
+	return a != 0
 }

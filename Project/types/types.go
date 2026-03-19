@@ -42,11 +42,11 @@ type ElevatorState struct {
 	Requests  [N_FLOORS][N_BUTTONS]bool
 	Error     bool
 	config    struct {
-		doorOpenDuration_s float64
+		doorOpenDurationS float64
 	}
 }
 
-type HallRequestsMatrix [4][3]bool
+type HallRequestsMatrix [N_FLOORS][N_BUTTONS]bool
 
 type OrderSyncState int
 
@@ -81,8 +81,8 @@ func InitElevatorState() ElevatorState {
 		Behaviour: EB_Idle,
 		Error:     false,
 		config: struct {
-			doorOpenDuration_s float64
-		}{doorOpenDuration_s: 3.0},
+			doorOpenDurationS float64
+		}{doorOpenDurationS: 3.0},
 	}
 }
 

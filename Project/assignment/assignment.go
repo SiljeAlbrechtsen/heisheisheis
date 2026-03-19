@@ -10,9 +10,6 @@ import (
 	"reflect"
 )
 
-// TODO: Dårlig kodekvalitet å bruke myID i alle?
-
-// Bytte navn?
 type hallRequestsInputJSON struct {
 	HallRequests [wv.NumFloors][wv.Directions]bool `json:"hallRequests"`
 	States       map[string]stateInputJSON         `json:"states"`
@@ -47,7 +44,6 @@ func directionToString(d fsm.Direction) string {
 	}
 }
 
-// Hjelpefunksjon
 func buildState(id string, worldview wv.Worldview) stateInputJSON {
 	return stateInputJSON{
 		Behaviour:   behaviourToString(worldview.State.Behaviour),
@@ -57,7 +53,6 @@ func buildState(id string, worldview wv.Worldview) stateInputJSON {
 	}
 }
 
-// Hjelpefunksjon
 func convertHallOrdersToBool(hallOrders wv.HallOrders) [wv.NumFloors][wv.Directions]bool {
 	var converted [wv.NumFloors][wv.Directions]bool
 
@@ -72,10 +67,8 @@ func convertHallOrdersToBool(hallOrders wv.HallOrders) [wv.NumFloors][wv.Directi
 	return converted
 }
 
-// Hjelpefunksjon
-func buildInputHallRequestAssigner(latestWorldviews map[string]wv.Worldview, MyID string) hallRequestsInputJSON {
-	// Hent hall requests fra egen worldview
-	hallRequests := convertHallOrdersToBool(latestWorldviews[MyID].HallOrders)
+func buildAssignerInput(latestWorldviews map[string]wv.Worldview, myID string) hallRequestsInputJSON {
+	hallRequests := convertHallOrdersToBool(latestWorldviews[myID].HallOrders)
 
 	states := make(map[string]stateInputJSON)
 	for id, worldview := range latestWorldviews {
@@ -91,9 +84,8 @@ func buildInputHallRequestAssigner(latestWorldviews map[string]wv.Worldview, MyI
 	}
 }
 
-// Eller bare assignRequests, siden den sier noe om caborders også?
-func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (map[string][4][3]bool, error) {
-	input := buildInputHallRequestAssigner(latestWorldviews, MyID)
+func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (map[string][4][3]bool, error) {
+	input := buildAssignerInput(latestWorldviews, myID)
 	if len(input.States) == 0 {
 		return nil, fmt.Errorf("ingen tilgjengelige heiser (alle i error state)")
 	}
@@ -124,12 +116,10 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, MyID string) (
 	return result, nil
 }
 
-// GO routine
 func RunHallRequestAssigner(
 	myID string,
 	worldviewToAssignerCh <-chan map[string]wv.Worldview,
-	//assignerToFsmCh chan<- [4][3]bool,
-	assignerToWordviewCh chan<- map[string][4][3]bool,
+	assignerToWorldviewCh chan<- map[string][4][3]bool,
 ) {
 	var lastResult map[string][4][3]bool
 	for {
@@ -139,9 +129,8 @@ func RunHallRequestAssigner(
 			fmt.Println("Assigner feil:", err)
 			continue
 		}
-		// reflect.DeepEqual er med i standard bib. i go og brukes for å sammenligne maps.
 		if !reflect.DeepEqual(result, lastResult) {
-			assignerToWordviewCh <- result
+			assignerToWorldviewCh <- result
 			lastResult = result
 		}
 	}

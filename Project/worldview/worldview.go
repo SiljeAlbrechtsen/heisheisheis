@@ -4,38 +4,23 @@ import (
 	fsm "Project/FSM"
 	t "Project/types"
 	"fmt"
-
-	//"sync"
 	"time"
 )
-
-//TODO
-/*
-Teste mergingen
-Legge til timer på obstruction
-Lage logikk for når en heis kommer tilbake etter mistet internett. Kopiere bare hall orders. Hvordan skal den gjøre det?
-
-*/
-
-//______________________________________________________________________________________________________
-//----------------  Structs ----------------------------------------------------------------------------
-//______________________________________________________________________________________________________
 
 const (
 	Directions = 2
 	NumFloors  = 4
 )
 
-// Brukes til OwnerID
+// Spesielle OwnerID-verdier brukt i synkroniseringsprotokollen
 const (
 	PeerDied = "peerDied"
 	NoOwner  = ""
 )
 
-// type CabOrders [NumFloors]bool // Må vel ikke deklareres først?
 type OrderSyncState = t.OrderSyncState
 
-const ( //TODO: Fjerne disse og bruk types direkte
+const (
 	None           = t.None
 	Unconfirmed    = t.Unconfirmed
 	Confirmed      = t.Confirmed
@@ -163,38 +148,25 @@ func updatePeerWorldviewFromNetwork(latestWorldviews map[string]Worldview, input
 // TODO
 // funksjon som legger inn caborders/hallorders inn i din egen worldview. evt samle de sånn at vi kan bruke samme funksjon for de
 
-// Setter state fra confirmet til uncondiremd og ownerID til PeerDied, kjøres når heis dør
+// markPeerDeadInHallOrders degraderer Confirmed-ordrer eid av lostId til Unconfirmed/PeerDied,
+// slik at andre heiser kan ta over ordren.
 func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	ho := hallOrders
-	//fmt.Printf("I markPeerDeadInHallOrders \n")
 	for i, row := range ho {
 		for j := range row {
 			order := ho[i][j]
-
 			if order.OwnerID == lostId && order.SyncState == Confirmed {
 				order.SyncState = Unconfirmed
 				order.OwnerID = PeerDied
-
 			}
 			ho[i][j] = order
-			//fmt.Printf("Floor %d Dir %d: %+v\n", i, j, order)
 		}
 	}
-	//fmt.Println(":")
 	return ho
 }
 
-// Endring
-func dirToIndex(d fsm.Direction) int {
-	if d == fsm.D_Up {
-		return 1
-	}
-	return 0
-}
-
-// Mottar elevatorState på channel fra FSM, bruke dette til å oppdatere state og
-//
-//	ordre i worldview.
+// updateWorldviewWithElevatorState oppdaterer worldview med ny elevatortilstand fra FSM,
+// inkludert serverte cab-ordrer og fullførte hall-ordrer (setter DeleteProposed).
 func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.ElevatorState, myID string) Worldview {
 	wv := worldview
 	prevState := wv.State
@@ -231,8 +203,6 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 	if upOrder.SyncState == Confirmed &&
 		!inputStateElevator.Requests[checkFloor][fsm.B_HallUp] &&
 		(prevState.Requests[checkFloor][fsm.B_HallUp] || upOrder.OwnerID == myID) {
-		fmt.Printf("[WV] DeleteProposed: floor=%d dir=Up (prevReq=%v, owner=%q, myID=%q)\n",
-			checkFloor, prevState.Requests[checkFloor][fsm.B_HallUp], upOrder.OwnerID, myID)
 		upOrder.SyncState = DeleteProposed
 		wv.HallOrders[checkFloor][fsm.B_HallUp] = upOrder
 	}
@@ -241,8 +211,6 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 	if downOrder.SyncState == Confirmed &&
 		!inputStateElevator.Requests[checkFloor][fsm.B_HallDown] &&
 		(prevState.Requests[checkFloor][fsm.B_HallDown] || downOrder.OwnerID == myID) {
-		fmt.Printf("[WV] DeleteProposed: floor=%d dir=Down (prevReq=%v, owner=%q, myID=%q)\n",
-			checkFloor, prevState.Requests[checkFloor][fsm.B_HallDown], downOrder.OwnerID, myID)
 		downOrder.SyncState = DeleteProposed
 		wv.HallOrders[checkFloor][fsm.B_HallDown] = downOrder
 	}
@@ -250,13 +218,7 @@ func updateWorldviewWithElevatorState(worldview Worldview, inputStateElevator t.
 	return wv
 }
 
-// _______________________________________________________________
-// ----------------GOROUTINE FOR WORLDVIEW------------------------
-// _______________________________________________________________
-
-// Når worldview oppdateres skal sendWorldviewsToOtherModules kjøres
-
-// Endret, lagt til. Den er litt feil tror jeg for den setter bare ownerID til vår egen heis og ikke de ordrene som blir tatt av andre heiser
+// updateOwnerIDsFromAssignment oppdaterer OwnerID på bekreftede hall-ordrer basert på assigner-resultatet.
 func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string][4][3]bool) HallOrders {
 	ho := hallOrders
 	for floor := 0; floor < NumFloors; floor++ {
@@ -298,28 +260,6 @@ func debugHallDirection(dir int) string {
 		return "Down"
 	default:
 		return fmt.Sprintf("Unknown(%d)", dir)
-	}
-}
-
-func DebugPrintAllCabOrders(context string, allCabOrders map[string][NumFloors]bool) {
-	//fmt.Printf("\n[Worldview] AllCabOrders %s\n", context)
-	if len(allCabOrders) == 0 {
-		//fmt.Printf("  (tom)\n")
-		return
-	}
-	for id, orders := range allCabOrders {
-		fmt.Printf("  elevator=%q  floors: ", id)
-		anyActive := false
-		for floor, active := range orders {
-			if active {
-				fmt.Printf("%d ", floor)
-				anyActive = true
-			}
-		}
-		if !anyActive {
-			fmt.Printf("(ingen)")
-		}
-		fmt.Println()
 	}
 }
 
@@ -446,7 +386,7 @@ func GoroutineForWorldview(
 	for {
 		select {
 		case inputStateElevator := <-elevatorToWorldviewCh:
-			myWorldview = worldviewsMap[myID] // A-La til denne for å sikre at vi har siste versjon av worldview før vi oppdaterer den
+			myWorldview = worldviewsMap[myID]
 			myWorldview = updateWorldviewWithElevatorState(myWorldview, inputStateElevator, myID)
 			if myWorldview.AllCabOrders == nil {
 				myWorldview.AllCabOrders = make(map[string][NumFloors]bool)
@@ -488,20 +428,17 @@ func GoroutineForWorldview(
 			}
 
 			worldviewsMap[myID] = myWorldview
-			//DebugPrintAllCabOrders(fmt.Sprintf("etter peer-oppdatering fra %q", inputPeerWorldview.IdElevator), myWorldview.AllCabOrders)
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestToSync(copyMap(worldviewsMap))
 
-		case newPeerIdCh := <-newPeerIdCh:
-			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeerIdCh)
-			if newPeerIdCh == myID {
+		case newPeerID := <-newPeerIdCh:
+			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeerID)
+			if newPeerID == myID {
 				hasNetwork = true
-			}
-			if newPeerIdCh == myID {
-				for id, wv := range worldviewsMap {
+				// Gjenopprett hallOrders fra en kjent peer ved reconnect
+				for id, peerWv := range worldviewsMap {
 					if id != myID {
-						fmt.Printf("[Worldview] Kopierer hallOrders fra peer %s\n", id)
-						myWorldview.HallOrders = wv.HallOrders
+						myWorldview.HallOrders = peerWv.HallOrders
 						break
 					}
 				}
@@ -530,19 +467,14 @@ func GoroutineForWorldview(
 		case inputCabBtn := <-cabBtnCh:
 			myWorldview = worldviewsMap[myID]
 			myWorldview = addNewCabOrder(myWorldview, inputCabBtn, myID)
-
 			worldviewsMap[myID] = myWorldview
-			//DebugPrintAllCabOrders(fmt.Sprintf("etter cab-knapp floor=%d", inputCabBtn), myWorldview.AllCabOrders)
 			sendLatestLights()
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
 			sendLatestToSync(copyMap(worldviewsMap))
 
 		case inputAssignment := <-assignerToWorldviewCh:
 			myWorldview = worldviewsMap[myID]
-			debugPrintHallOrders("before assignment", myWorldview.HallOrders) // TO DO: FJERN
 			myWorldview.HallOrders = updateOwnerIDsFromAssignment(myWorldview.HallOrders, inputAssignment)
-			debugPrintHallOrders("after assignment", myWorldview.HallOrders) // TO DO: FJERN
-
 			worldviewsMap[myID] = myWorldview
 			sendLatestLights()
 			sendLatestToNetwork(copyMap(worldviewsMap)[myID])
@@ -556,15 +488,8 @@ func GoroutineForWorldview(
 	}
 }
 
-// Vi har gjort det slik at alt som skal til assigner går først innom sync.
-
-//___________________________________________________________________________
-//------FUNKSJONER FOR Å SENDE KOPIERT WORLDVIEW TIL ANDRE MODULER-----------
-//___________________________________________________________________________
-
-// Tar inn map, setter den døde noden sin state til død og oppdaterer ordre til død node
+// HandleLostPeer markerer tapt peer som død og degraderer dens ordrer til Unconfirmed/PeerDied.
 func HandleLostPeer(latestWorldviews map[string]Worldview, myID string, lostID string) map[string]Worldview {
-	//fmt.Printf("[Worldview] HandleLostPeer: lostID=%s myID=%s\n", lostID, myID)
 	if lostID == myID {
 		return latestWorldviews
 	}

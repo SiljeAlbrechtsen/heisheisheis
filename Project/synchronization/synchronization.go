@@ -2,42 +2,7 @@ package synchronization
 
 import (
 	wv "Project/worldview"
-	"fmt"
 )
-
-func syncStateName(s wv.OrderSyncState) string {
-	switch s {
-	case wv.None:
-		return "None"
-	case wv.Unconfirmed:
-		return "Unconfirmed"
-	case wv.Confirmed:
-		return "Confirmed"
-	case wv.DeleteProposed:
-		return "DeleteProposed"
-	default:
-		return fmt.Sprintf("Unknown(%d)", s)
-	}
-}
-
-func dirName(d int) string {
-	if d == 0 {
-		return "Up"
-	}
-	return "Down"
-}
-
-// ____________________________________________________________________________________________________________
-// ---------------- CHANNELS-----------------------------------------------------------------------------------
-// ____________________________________________________________________________________________________________
-
-// Inn channel: worldview-map            worldviewToSyncCh
-
-// Ut channel: sende ut hallOrders.      syncToWorldviewCh
-
-//____________________________________________________________________________________________________________
-//----------------  FUNKSJONER FOR Å HÅNDTERE WORLDVIEW ------------------------------------------------------
-//____________________________________________________________________________________________________________
 
 func nextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 	switch currentSyncState {
@@ -59,7 +24,7 @@ func nextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 	}
 }
 
-func SecondToNextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
+func secondToNextOrderState(currentSyncState wv.OrderSyncState) wv.OrderSyncState {
 	switch currentSyncState {
 
 	case wv.None:
@@ -79,17 +44,6 @@ func syncHallOrders(
 	myID string,
 ) wv.HallOrders {
 	myHallOrders := latestWorldviews[myID].HallOrders
-
-	// Logg hvem vi synkroniserer med
-	peerList := ""
-	for id, peer := range latestWorldviews {
-		if peer.ErrorState {
-			peerList += id + "(dead) "
-		} else {
-			peerList += id + " "
-		}
-	}
-	//fmt.Printf("[Sync] Starter synk for %s | peers: %s\n", myID, peerList)
 
 	// Steg 0: Propager peerDied — hvis en alive peer har {Unconfirmed, peerDied} og vi har
 	// {Confirmed, _}, skal vi følge ned. Eieren av ordren har markert seg som dead/error,
@@ -112,7 +66,7 @@ func syncHallOrders(
 
 	// Steg 1: Følg peers som er ett steg foran (hopp kun over Dead, ikke ErrorState)
 	for _, peer := range latestWorldviews {
-		if peer.Dead {
+		if peer.Dead || peer.IdElevator == myID{
 			continue
 		}
 		for f := 0; f < wv.NumFloors; f++ {
@@ -124,13 +78,9 @@ func syncHallOrders(
 					continue
 
 				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
-					//fmt.Printf("[Sync][Steg1] Følger %s: floor=%d dir=%s %s->%s\n",
-					//	peer.IdElevator, f, dirName(d),
-					//	syncStateName(myCurrentOrder.SyncState),
-					//	syncStateName(peerCurrentOrder.SyncState))
 					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
 				}
-				if SecondToNextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
+				if secondToNextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
 					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
 				}
 			}
@@ -158,15 +108,11 @@ func syncHallOrders(
 					}
 					peerState := peer.HallOrders[f][d].SyncState
 					if peerState != wv.Unconfirmed && peerState != wv.Confirmed {
-						//fmt.Printf("[Sync][Steg2] Ikke konsensus Unconfirmed: floor=%d dir=%s peer=%s er %s\n",
-						//	f, dirName(d), peer.IdElevator,
-						//	syncStateName(peerState))
 						allAgree = false
 						break
 					}
 				}
 				if allAgree {
-					//fmt.Printf("[Sync][Steg2] Konsensus! Unconfirmed->Confirmed floor=%d dir=%s\n", f, dirName(d))
 					myHallOrders[f][d].SyncState = wv.Confirmed
 					if myHallOrders[f][d].OwnerID == wv.PeerDied {
 						myHallOrders[f][d].OwnerID = wv.NoOwner
@@ -183,12 +129,10 @@ func syncHallOrders(
 
 					if peerState != wv.DeleteProposed && peerState != wv.None {
 						allAgree = false
-						//fmt.Printf("[Sync][Steg2] DeleteProposed blokkert: floor=%d dir=%s peer=%s er %s\n", f, dirName(d), peer.IdElevator, syncStateName(peerState))
 						break
 					}
 				}
 				if allAgree {
-					//fmt.Printf("[Sync][Steg2] Konsensus! DeleteProposed->None floor=%d dir=%s\n", f, dirName(d))
 					myHallOrders[f][d] = wv.Order{SyncState: wv.None, OwnerID: wv.NoOwner}
 				}
 			}
@@ -206,10 +150,6 @@ func syncHallOrders(
 
 	return myHallOrders
 }
-
-// _______________________________________________________
-// ---------------GO ROUTINE MED CHANNELS-----------------
-// _______________________________________________________
 
 func GoRoutineSync(
 	myID string,

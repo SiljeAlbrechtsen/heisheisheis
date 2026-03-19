@@ -3,33 +3,29 @@ package hardware
 import (
 	elevio "Project/Driver"
 	t "Project/types"
-	"fmt"
 	"time"
 )
 
 func ButtonsListener(cabButtonCh chan int, hallButtonCh chan [2]int) {
-
 	elevioButtonCh := make(chan elevio.ButtonEvent)
 	go elevio.PollButtons(elevioButtonCh)
 
 	for {
 		select {
-		case a := <-elevioButtonCh:
-			if a.Button == elevio.BT_Cab {
-				cabButtonCh <- a.Floor
+		case event := <-elevioButtonCh:
+			if event.Button == elevio.BT_Cab {
+				cabButtonCh <- event.Floor
 			} else {
-				result := [2]int{a.Floor, int(a.Button)}
-				hallButtonCh <- result
+				hallButtonCh <- [2]int{event.Floor, int(event.Button)}
 			}
-			fmt.Println(a)
 		}
 	}
 }
 
-
-func TurnOffAllLights() { //A-La til en slå av alle lys ed init
-	for f := 0; f < 4; f++ { //A-TO DO: Fjern hardkoding
-		for b := elevio.ButtonType(0); b < 3; b++ {
+// TurnOffAllLights slår av alle knapplys, dørlampe og stopplampe ved oppstart.
+func TurnOffAllLights() {
+	for f := 0; f < t.N_FLOORS; f++ {
+		for b := elevio.ButtonType(0); b < elevio.ButtonType(t.N_BUTTONS); b++ {
 			elevio.SetButtonLamp(b, f, false)
 		}
 	}

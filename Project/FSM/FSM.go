@@ -1,7 +1,6 @@
 package fsm
 
 import (
-	"fmt"
 	"time"
 
 	elevio "Project/Driver"
@@ -9,25 +8,26 @@ import (
 	t "Project/types"
 )
 
-func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState, printHallOrdersReqCh chan bool) {
+const doorOpenDuration = 3000 * time.Millisecond
+
+func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState, printHallOrdersReqCh chan bool) {
 
 	obstruct := false
 
 	elevatorState := InitElevatorState()
 	InitElevator(&elevatorState, elevatorStateCh)
 
-	var prevWorldview t.Worldview // Track previous worldview to detect Unconfirmed->Confirmed transitions
+	var prevWorldview t.Worldview
 
-	// Cab-lys ticker — kun for periodisk oppdatering av cab-lys
+	// Periodisk ticker for fallback-bevegelse og etasjeoppdatering
 	floorTicker := time.NewTicker(500 * time.Millisecond)
 	defer floorTicker.Stop()
 
-	// Etasjesensor med 20ms polling — håndterer all etasjelogikk
+	// Etasjesensor med 20ms polling
 	floorSensorCh := make(chan int)
 	go elevio.PollFloorSensor(floorSensorCh)
 
 	var doorTimer <-chan time.Time
-	doorTimer = nil
 	errorTimer := time.NewTimer(5 * time.Second)
 	defer stopAndDrainTimer(errorTimer)
 
@@ -47,12 +47,8 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 			requestsChanged := elevatorState.Requests != mergedRequests
 			elevatorState.Requests = mergedRequests
 
-			fmt.Printf("[FSM] Worldview mottatt. Floor=%d Behaviour=%d Requests=%v\n",
-				elevatorState.Floor, elevatorState.Behaviour, elevatorState.Requests)
-
 			if requests_shouldServeCurrentFloor(elevatorState) {
 				elevatorState, doorTimer = openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
-				fmt.Printf("[FSM] Serverer nåværende etasje umiddelbart. Requests etter clear=%v\n", elevatorState.Requests)
 				continue
 			}
 			if elevatorCanMove(elevatorState) {
@@ -70,7 +66,7 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 			doorTimer = nil
 			// Hold døren åpen så lenge obstruction er aktiv eller heisen er i error
 			if obstruct || elevatorState.Error {
-				doorTimer = time.After(3000 * time.Millisecond)
+				doorTimer = time.After(doorOpenDuration)
 				continue
 			}
 			if requests_shouldServeCurrentFloor(elevatorState) {
@@ -115,7 +111,6 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 			}
 
 		case <-stopBtnCh:
-			fmt.Println(elevatorState)
 			sendLatestBool(printHallOrdersReqCh, true)
 
 		case obstruct = <-obstructCh:
@@ -126,22 +121,19 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 			}
 
 		case <-errorTimer.C:
-			fmt.Println("Tiden er ute!")
 			sendLatestBool(errorLightCh, updateErrorState(true, &elevatorState, elevatorStateCh))
-			fmt.Println(elevatorState)
 		}
 	}
 }
 
-// Init for elevator
+// InitElevator kjører heisen til nærmeste etasje og nullstiller all state.
 func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
-
-	hardware.TurnOffAllLights() //A-Fjerner alle gamle lys, i tilfelle heisen starter med noen lys på
+	hardware.TurnOffAllLights()
 
 	if elevio.GetFloor() == -1 {
 		elevio.SetMotorDirection(elevio.MD_Down)
 		for elevio.GetFloor() == -1 {
-			time.Sleep(50 * time.Millisecond) //TO DO: HARD CONSTANT fjernt
+			time.Sleep(50 * time.Millisecond)
 		}
 		elevio.SetMotorDirection(elevio.MD_Stop)
 	}
@@ -150,30 +142,20 @@ func InitElevator(elevator *ElevatorState, elevatorStateCh chan ElevatorState) {
 	sendState(elevator, elevatorStateCh)
 }
 
-// Helper functions for FSM3
-
-// mergeRequestsFromWorldview syncs FSM's requests with worldview's confirmed orders
-// Always includes all Confirmed hall orders FSM owns, and all cab orders
+// mergeRequestsFromWorldviewTransitions synkroniserer FSM sine requests med worldview sine bekreftede ordrer.
+// Inkluderer alltid alle Confirmed hall-ordrer som denne heisen eier, og alle cab-ordrer.
 func mergeRequestsFromWorldviewTransitions(currentRequests [N_FLOORS][N_BUTTONS]bool, prevWorldview, newWorldview t.Worldview) [N_FLOORS][N_BUTTONS]bool {
 	requests := currentRequests
 
-	// Hall requests: include ALL Confirmed orders owned by this elevator
+	// Hall requests: ta med alle Confirmed ordrer denne heisen eier
 	for f := 0; f < N_FLOORS; f++ {
 		upOrder := newWorldview.HallOrders[f][B_HallUp]
 		if upOrder.SyncState == t.Confirmed && upOrder.OwnerID == newWorldview.IdElevator {
-			if !requests[f][B_HallUp] {
-				fmt.Printf("[FSM] Merge: legger til HallUp floor=%d (state=%d owner=%q myID=%q)\n",
-					f, upOrder.SyncState, upOrder.OwnerID, newWorldview.IdElevator)
-			}
 			requests[f][B_HallUp] = true
 		}
 
 		downOrder := newWorldview.HallOrders[f][B_HallDown]
 		if downOrder.SyncState == t.Confirmed && downOrder.OwnerID == newWorldview.IdElevator {
-			if !requests[f][B_HallDown] {
-				fmt.Printf("[FSM] Merge: legger til HallDown floor=%d (state=%d owner=%q myID=%q)\n",
-					f, downOrder.SyncState, downOrder.OwnerID, newWorldview.IdElevator)
-			}
 			requests[f][B_HallDown] = true
 		}
 	}
@@ -190,31 +172,15 @@ func mergeRequestsFromWorldviewTransitions(currentRequests [N_FLOORS][N_BUTTONS]
 	return requests
 }
 
-func updateElevatorRequests(elevatorState ElevatorState, newRequests [4][3]bool) ElevatorState {
-	for f := 0; f < N_FLOORS; f++ {
-		for b := 0; b < N_BUTTONS; b++ {
-			if newRequests[f][b] {
-				elevatorState.Requests[f][b] = true
-			}
-		}
-	}
-	return elevatorState
-}
-
 func applyDecision(db DirnBehaviourPair, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	// Guard: never publish an impossible "moving away from end floor" state.
+	// Forhindre at heisen kjører ut over første eller siste etasje
 	if (elevatorState.Floor == 0 && db.ElevatorBehaviour == EB_Moving && db.Dirn == D_Down) ||
 		(elevatorState.Floor == N_FLOORS-1 && db.ElevatorBehaviour == EB_Moving && db.Dirn == D_Up) {
 		db = DirnBehaviourPair{Dirn: D_Stop, ElevatorBehaviour: EB_Idle}
 	}
 
-	if db.ElevatorBehaviour == EB_DoorOpen {
-		elevio.SetDoorOpenLamp(true)
-	} else {
-		elevio.SetDoorOpenLamp(false)
-	}
+	elevio.SetDoorOpenLamp(db.ElevatorBehaviour == EB_DoorOpen)
 	elevio.SetMotorDirection(elevio.MotorDirection(db.Dirn))
-	fmt.Printf("[FSM] applyDecision: Dirn=%d Behaviour=%d (floor=%d)\n", db.Dirn, db.ElevatorBehaviour, elevatorState.Floor)
 
 	if elevatorState.Dirn == db.Dirn && elevatorState.Behaviour == db.ElevatorBehaviour {
 		return
@@ -224,11 +190,12 @@ func applyDecision(db DirnBehaviourPair, elevatorState *ElevatorState, elevatorS
 	sendState(elevatorState, elevatorStateCh)
 }
 
+// clearFloorRequests åpner døren og fjerner ordrer hvis heisen er på en etasje med aktive ordrer.
+// GetFloor() != -1 forhindrer clearing når heisen er mellom etasjer.
 func clearFloorRequests(elevatorState ElevatorState, elevatorStateCh chan ElevatorState) (ElevatorState, <-chan time.Time) {
-	if requests_shouldServeCurrentFloor(elevatorState) && elevio.GetFloor() != -1 && !elevatorState.Error { //A-La til elevio.GetFloor() != -1 for å unngå å clear'e requests når heisen er mellom etasjer
+	if requests_shouldServeCurrentFloor(elevatorState) && elevio.GetFloor() != -1 && !elevatorState.Error {
 		return openDoorAndClearCurrentFloor(elevatorState, elevatorStateCh)
 	}
-
 	return elevatorState, nil
 }
 
@@ -237,16 +204,13 @@ func openDoorAndClearCurrentFloor(elevatorState ElevatorState, elevatorStateCh c
 	elevatorState = requests_clearAtCurrentFloor(elevatorState)
 	elevatorState.Behaviour = EB_DoorOpen
 	elevio.SetDoorOpenLamp(true)
-	sendState(&elevatorState, elevatorStateCh) // Alltid send - unngår at cleared state forsvinner
+	sendState(&elevatorState, elevatorStateCh)
 
-	return elevatorState, time.After(3000 * time.Millisecond)
+	return elevatorState, time.After(doorOpenDuration)
 }
 
 func elevatorCanMove(e ElevatorState) bool {
-	if e.Behaviour != EB_DoorOpen && !e.Error && requests_checkForRequests(e) && elevio.GetFloor() != -1 {
-		return true
-	}
-	return false
+	return e.Behaviour != EB_DoorOpen && !e.Error && requests_checkForRequests(e) && elevio.GetFloor() != -1
 }
 
 func resetTimer(t *time.Timer, d time.Duration) {

@@ -1,10 +1,8 @@
 package fsm
 
-
 import (
 	elevio "Project/Driver"
 	t "Project/types"
-	"fmt"
 )
 
 const N_FLOORS = t.N_FLOORS
@@ -27,12 +25,11 @@ const D_Down = t.D_Down
 const D_Stop = t.D_Stop
 const D_Up = t.D_Up
 
-func InitElevatorState() ElevatorState { //A-TO DO: Sjekk om det trenges stor forbokstav
+func InitElevatorState() ElevatorState {
 	return t.InitElevatorState()
 }
 
-//////////////Opdater state og send til worldview/////////////////////
-
+// sendState sender alltid siste elevatorState til worldview, og dropper eventuelle gamle verdier i kanalen.
 func sendState(elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
 	select {
 	case elevatorStateCh <- *elevatorState:
@@ -60,67 +57,20 @@ func updateFloor(floor int, elevatorState *ElevatorState, elevatorStateCh chan E
 	sendState(elevatorState, elevatorStateCh)
 }
 
-// A-Tar i mot retning og oppdaterer state+channel til wv
-func updateDirection(direction Direction, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	if elevatorState.Dirn == direction {
-		return
-	}
-	elevatorState.Dirn = direction
-	elevio.SetMotorDirection(elevio.MotorDirection(direction)) //A-TO DO: Sjekk om det trenges type konvertering og heller endre elevio sin type til å bruke vår Direction type
-	sendState(elevatorState, elevatorStateCh)
-}
-
 func updateBehaviour(behaviour Behaviour, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
 	if elevatorState.Behaviour == behaviour {
 		return
 	}
-	if behaviour == EB_DoorOpen {
-		elevio.SetDoorOpenLamp(true)
-	} else {
-		elevio.SetDoorOpenLamp(false)
-	}
+	elevio.SetDoorOpenLamp(behaviour == EB_DoorOpen)
 	elevatorState.Behaviour = behaviour
 	sendState(elevatorState, elevatorStateCh)
 }
 
-func updateRequests(requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	if elevatorState.Requests == requests {
-		return
-	}
-	elevatorState.Requests = requests
-	sendState(elevatorState, elevatorStateCh)
-}
-
-func updateBehaviourAndRequests(behaviour Behaviour, requests [N_FLOORS][N_BUTTONS]bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) {
-	changed := false
-
-	if behaviour == EB_DoorOpen {  //TODO Sjekk om man må ha behaviour, eller sette open door explecit
-		elevio.SetDoorOpenLamp(true)
-	} else {
-		elevio.SetDoorOpenLamp(false)
-	}
-	if elevatorState.Behaviour != behaviour {
-		elevatorState.Behaviour = behaviour
-		changed = true
-	}
-
-	if elevatorState.Requests != requests {
-		elevatorState.Requests = requests
-		changed = true
-	}
-
-	if changed {
-		sendState(elevatorState, elevatorStateCh)
-		fmt.Printf("\n***\n%+v\n***\n", *elevatorState)
-	}
-}
-
-func updateErrorState(errorState bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) bool{
+func updateErrorState(errorState bool, elevatorState *ElevatorState, elevatorStateCh chan ElevatorState) bool {
 	if elevatorState.Error == errorState {
 		return elevatorState.Error
 	}
 	elevatorState.Error = errorState
 	sendState(elevatorState, elevatorStateCh)
-	fmt.Println("*****\nError!\n*****")
 	return elevatorState.Error
 }

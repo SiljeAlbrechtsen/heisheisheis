@@ -11,54 +11,41 @@ import (
 	"time"
 )
 
-//////// TESTING AV NETWORK PACKAGE //////////
-
-// We define some custom struct to send over the network.
-// Note that all members we want to transmit must be public. Any private members
-//  will be received as zero-values.
-
-// Tar inn vår worldview og kanalen vi skal sende på, og legger periodisk worldview inn på tx-kanalen
+// TransmitWorldviewPeriodically sender vår worldview periodisk på nettverket.
+// Sender alltid siste versjon hvert 100ms.
 func TransmitWorldviewPeriodically(worldviewTx chan<- wv.Worldview, worldviewToNetworkCh <-chan wv.Worldview) {
-	WorldviewMsg := <-worldviewToNetworkCh
+	currentMsg := <-worldviewToNetworkCh
 
 	for {
 		select {
-		// Hvis worldview endres
 		case newMsg := <-worldviewToNetworkCh:
-			WorldviewMsg = newMsg
-
-		// sender worldview etter 1 sek
+			currentMsg = newMsg
 		case <-time.After(100 * time.Millisecond):
-			worldviewTx <- WorldviewMsg
+			worldviewTx <- currentMsg
 		}
 	}
 }
 
-// Tar inn worldviewen vi mottar på Rx og setter den på kanalen som sender til worldview
+// ForwardWorldviewFromNetwork videresender mottatte worldviews fra nettverket til worldview-goroutinen.
+// Sender ikke-blokkerende til init-kanalen (kun relevant ved oppstart).
 func ForwardWorldviewFromNetwork(worldviewRx <-chan wv.Worldview, networkToWorldviewCh chan<- wv.Worldview, networkToInitCh chan<- wv.Worldview) {
 	for {
-		wv := <-worldviewRx
-		//fmt.Println("Worldview fra: ", wv.IdElevator)
-		//fmt.Println("Hallorders: ", wv.HallOrders)
-		//fmt.Println("State: ", wv.State)
-		//fmt.Println("allCaborders: ", wv.AllCabOrders)
-
+		received := <-worldviewRx
 		select {
-		case networkToInitCh <- wv: // sender til init hvis noen lytter                                                              
-        default:                    // dropper ellers, ikke blokkerende                                                              
-        }
-        networkToWorldviewCh <- wv  // alltid send til normal drift    
+		case networkToInitCh <- received:
+		default:
+		}
+		networkToWorldviewCh <- received
 	}
 }
 
+// GetNodeID henter node-ID fra kommandolinjeflagg (-id), eller genererer en unik ID
+// basert på lokal IP og prosess-ID.
 func GetNodeID() string {
 	var id string
 	flag.StringVar(&id, "id", "", "id of this peer")
 	flag.Parse()
 
-	// ... or alternatively, we can use the local IP address.
-	// (But since we can run multiple programs on the same PC, we also append the
-	//  process ID)
 	if id == "" {
 		localIP, err := localip.LocalIP()
 		if err != nil {
@@ -70,7 +57,7 @@ func GetNodeID() string {
 	return id
 }
 
-// Endret: returnerer ikke lenger peerUpdateCh for å unngå to lesere på samme kanal
+// StartPeerDiscovery starter peer-oppdagelse og returnerer kanaler for nye og tapte peers.
 func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
 	peerUpdateCh := make(chan peers.PeerUpdate, 1)
 	newPeerIdCh := make(chan string, 1)
@@ -82,17 +69,10 @@ func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
 
 	go func() {
 		for update := range peerUpdateCh {
-
-			// Flyttet hit fra main.go
-			fmt.Printf("Peer update:\n")
-			fmt.Printf("  Peers: %q\n", update.Peers)
-			fmt.Printf("  New:   %q\n", update.New)
-			fmt.Printf("  Lost:  %q\n", update.Lost)
-
+			fmt.Printf("Peer update: peers=%q new=%q lost=%q\n", update.Peers, update.New, update.Lost)
 			if update.New != "" {
-				newPeerIdCh <- update.New 
+				newPeerIdCh <- update.New
 			}
-
 			for _, lostId := range update.Lost {
 				lostPeerIdCh <- lostId
 			}
@@ -102,12 +82,11 @@ func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
 	return newPeerIdCh, lostPeerIdCh
 }
 
+// SetupWorldviewNetwork oppretter kanaler og starter broadcast-sender/-mottaker for worldview.
 func SetupWorldviewNetwork() (chan<- wv.Worldview, <-chan wv.Worldview) {
-	// We make channels for sending and receiving our custom data types
 	worldviewTx := make(chan wv.Worldview)
 	worldviewRx := make(chan wv.Worldview)
 
-	// And start the transmitter/receiver pair on some port
 	go bcast.Transmitter(10002, worldviewTx)
 	go bcast.Receiver(10002, worldviewRx)
 
