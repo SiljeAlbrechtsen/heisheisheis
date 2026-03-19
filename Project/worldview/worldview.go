@@ -69,7 +69,6 @@ func worldviewInit(myId string, myWorldview Worldview, networkToInitCh <-chan Wo
 // ----------FUNKSJONER FOR Å TA IMOT OG HÅNDTERE DATA FRA ANDRE MODULER--------
 // _____________________________________________________________________________
 
-// SYNC sin func
 // shouldAcceptSyncOrder avgjør om sync-resultatet er gyldig fremgang
 // og ikke et stale resultat som ville regresse lokal tilstand.
 func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
@@ -289,7 +288,6 @@ func GoroutineForWorldview(
 	printHallOrdersReqCh <-chan bool, //ToDO Fjern etter testing
 
 	assignerToWorldviewCh <-chan map[string][4][3]bool,
-
 	worldviewToAssignerCh chan map[string]Worldview,
 	worldviewToSyncCh chan map[string]Worldview,
 	worldviewToNetworkCh chan Worldview,

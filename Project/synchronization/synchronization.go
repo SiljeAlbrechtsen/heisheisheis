@@ -64,9 +64,11 @@ func syncHallOrders(
 		}
 	}
 
-	// Steg 1: Følg peers som er ett steg foran (hopp kun over Dead, ikke ErrorState)
+	// Steg 1: Følg peers som er ett steg foran (hopp kun over Dead og seg selv)
+	// PeerDied-ordrer (fra Steg 0 eller worldview) skal IKKE promoteres her —
+	// kun Steg 2 konsensus kan avansere dem (med OwnerID-clearing).
 	for _, peer := range latestWorldviews {
-		if peer.Dead || peer.IdElevator == myID{
+		if peer.Dead || peer.IdElevator == myID {
 			continue
 		}
 		for f := 0; f < wv.NumFloors; f++ {
@@ -77,10 +79,10 @@ func syncHallOrders(
 				if myCurrentOrder == peerCurrentOrder {
 					continue
 
-				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
+				} else if nextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState && myCurrentOrder.OwnerID != wv.PeerDied {
 					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
 				}
-				if secondToNextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState {
+				if secondToNextOrderState(myCurrentOrder.SyncState) == peerCurrentOrder.SyncState && myCurrentOrder.OwnerID != wv.PeerDied {
 					myHallOrders[f][d].SyncState = peerCurrentOrder.SyncState
 				}
 			}
