@@ -44,7 +44,7 @@ func directionToString(d fsm.Direction) string {
 	}
 }
 
-func buildState(id string, worldview wv.Worldview) stateInputJSON {
+func buildAssignerState(id string, worldview wv.Worldview) stateInputJSON {
 	return stateInputJSON{
 		Behaviour:   behaviourToString(worldview.State.Behaviour),
 		Floor:       worldview.State.Floor,
@@ -75,7 +75,7 @@ func buildAssignerInput(latestWorldviews map[string]wv.Worldview, myID string) h
 		if worldview.Dead || worldview.ErrorState {
 			continue
 		}
-		states[id] = buildState(id, worldview)
+		states[id] = buildAssignerState(id, worldview)
 	}
 
 	return hallRequestsInputJSON{
@@ -85,12 +85,12 @@ func buildAssignerInput(latestWorldviews map[string]wv.Worldview, myID string) h
 }
 
 func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (map[string]wv.AssignmentMatrix, error) {
-	input := buildAssignerInput(latestWorldviews, myID)
-	if len(input.States) == 0 {
+	assignerInput := buildAssignerInput(latestWorldviews, myID)
+	if len(assignerInput.States) == 0 {
 		return nil, fmt.Errorf("ingen tilgjengelige heiser (alle i error state)")
 	}
 
-	jsonInput, err := json.Marshal(input)
+	jsonInput, err := json.Marshal(assignerInput)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (
 	return result, nil
 }
 
-func RunHallRequestAssigner(
+func RunAssigner(
 	myID string,
 	worldviewsForAssignerCh <-chan map[string]wv.Worldview,
 	assignmentCh chan<- map[string]wv.AssignmentMatrix,

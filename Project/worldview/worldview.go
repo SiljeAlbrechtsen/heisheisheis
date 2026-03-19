@@ -71,7 +71,7 @@ func copyWorldviews(m map[string]Worldview) map[string]Worldview {
 }
 
 func worldviewInit(myID string, myWorldview Worldview, initCh <-chan Worldview) Worldview {
-	myWv := myWorldview
+	localWorldview := myWorldview
 	timeout := time.After(1 * time.Second)
 	for {
 		select {
@@ -80,12 +80,12 @@ func worldviewInit(myID string, myWorldview Worldview, initCh <-chan Worldview) 
 				continue
 			}
 			copied := copyWorldviews(map[string]Worldview{incomingWv.IdElevator: incomingWv})[incomingWv.IdElevator]
-			myWv.HallOrders = copied.HallOrders
-			myWv.AllCabOrders = copied.AllCabOrders
-			return myWv
+			localWorldview.HallOrders = copied.HallOrders
+			localWorldview.AllCabOrders = copied.AllCabOrders
+			return localWorldview
 
 		case <-timeout:
-			return myWv
+			return localWorldview
 		}
 	}
 }
@@ -161,16 +161,16 @@ func updateWorldviewFromSync(worldviews map[string]Worldview, incomingOrders Hal
 
 // applyPeerWorldview stores the peer's worldview and updates local state based on it:
 // it synchronizes cab orders and downgrades hall orders if the peer is in an error state.
-func applyPeerWorldview(worldviews map[string]Worldview, peerWv Worldview, myID string) map[string]Worldview {
-	worldviews[peerWv.IdElevator] = peerWv
+func applyPeerWorldview(worldviews map[string]Worldview, peerWorldview Worldview, myID string) map[string]Worldview {
+	worldviews[peerWorldview.IdElevator] = peerWorldview
 
 	wv := worldviews[myID]
 	if wv.AllCabOrders == nil {
 		wv.AllCabOrders = make(map[string][NumFloors]bool)
 	}
-	wv.AllCabOrders[peerWv.IdElevator] = peerWv.AllCabOrders[peerWv.IdElevator]
-	if peerWv.ErrorState {
-		wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, peerWv.IdElevator)
+	wv.AllCabOrders[peerWorldview.IdElevator] = peerWorldview.AllCabOrders[peerWorldview.IdElevator]
+	if peerWorldview.ErrorState {
+		wv.HallOrders = markPeerDeadInHallOrders(wv.HallOrders, peerWorldview.IdElevator)
 	}
 	worldviews[myID] = wv
 	return worldviews
@@ -315,7 +315,7 @@ func RunWorldview(myID string, ch WorldviewChannels) {
 	}
 	worldviews[myID] = worldviewInit(myID, initialWv, ch.InitWorldview)
 
-	hasNetwork := true
+	networkAvailable := true
 
 	sendLights := func() {
 		wv := copyWorldviews(worldviews)[myID]
@@ -392,23 +392,23 @@ func RunWorldview(myID string, ch WorldviewChannels) {
 			sendLights()
 			sendToNetwork(copyWorldviews(worldviews)[myID])
 
-		case peerWv := <-ch.PeerWorldview:
-			if peerWv.IdElevator == myID {
+		case peerWorldview := <-ch.PeerWorldview:
+			if peerWorldview.IdElevator == myID {
 				continue
 			}
-			worldviews = applyPeerWorldview(worldviews, peerWv, myID)
+			worldviews = applyPeerWorldview(worldviews, peerWorldview, myID)
 			sendToNetwork(copyWorldviews(worldviews)[myID])
 			sendToSync(copyWorldviews(worldviews))
 
 		case newPeerID := <-ch.NewPeer:
 			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeerID)
 			if newPeerID == myID {
-				hasNetwork = true
+				networkAvailable = true
 				// Restore hallOrders from a known peer on reconnect
 				wv := worldviews[myID]
-				for id, peerWv := range worldviews {
+				for id, peerWorldview := range worldviews {
 					if id != myID {
-						wv.HallOrders = peerWv.HallOrders
+						wv.HallOrders = peerWorldview.HallOrders
 						break
 					}
 				}
@@ -417,14 +417,14 @@ func RunWorldview(myID string, ch WorldviewChannels) {
 
 		case lostPeerID := <-ch.LostPeer:
 			if lostPeerID == myID {
-				hasNetwork = false
+				networkAvailable = false
 			}
 			worldviews = handleLostPeer(worldviews, myID, lostPeerID)
 			sendToNetwork(copyWorldviews(worldviews)[myID])
 			sendToSync(copyWorldviews(worldviews))
 
 		case hallBtn := <-ch.HallBtn:
-			if hasNetwork {
+			if networkAvailable {
 				worldviews[myID] = addNewHallOrder(worldviews[myID], hallBtn)
 				sendLights()
 				sendToNetwork(copyWorldviews(worldviews)[myID])

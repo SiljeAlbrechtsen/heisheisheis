@@ -108,8 +108,8 @@ func StartPeerDiscovery(id string) (<-chan string, <-chan string) {
 	return newPeerCh, lostPeerCh
 }
 
-// SetupWorldviewNetwork creates channels and starts the broadcast sender/receiver for worldview.
-func SetupWorldviewNetwork() (chan<- wv.Worldview, <-chan wv.Worldview) {
+// StartWorldviewBroadcast creates channels and starts the broadcast sender/receiver for worldview.
+func StartWorldviewBroadcast() (chan<- wv.Worldview, <-chan wv.Worldview) {
 	broadcastTx := make(chan wv.Worldview)
 	broadcastRx := make(chan wv.Worldview)
 

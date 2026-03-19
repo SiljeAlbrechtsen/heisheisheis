@@ -11,9 +11,9 @@ import (
 const doorOpenDuration = 3000 * time.Millisecond
 const errorTimeout = 3000 * time.Millisecond
 
-func RunElevator(fsmWorldviewCh chan t.Worldview, elevatorStateCh chan ElevatorState, debugPrintReqCh chan bool) {
+func RunFSM(fsmWorldviewCh chan t.Worldview, elevatorStateCh chan ElevatorState, debugPrintReqCh chan bool) {
 
-	obstruct := false
+	obstructionActive := false
 
 	elevatorState := InitElevatorState()
 	InitElevator(&elevatorState, elevatorStateCh)
@@ -31,10 +31,10 @@ func RunElevator(fsmWorldviewCh chan t.Worldview, elevatorStateCh chan ElevatorS
 	defer stopAndDrainTimer(errorTimer)
 
 	stopBtnCh := make(chan bool)
-	obstructCh := make(chan bool)
+	obstructionCh := make(chan bool)
 	errorLightCh := make(chan bool, 1)
 	go elevio.PollStopButton(stopBtnCh)
-	go elevio.PollObstructionSwitch(obstructCh)
+	go elevio.PollObstructionSwitch(obstructionCh)
 	go hardware.ErrorLight(errorLightCh)
 
 	
@@ -59,7 +59,7 @@ func RunElevator(fsmWorldviewCh chan t.Worldview, elevatorStateCh chan ElevatorS
 		case <-doorTimer:
 			doorTimer = nil
 			// Keep the door open as long as obstruction is active or the elevator is in an error state
-			if obstruct || elevatorState.Error {
+			if obstructionActive || elevatorState.Error {
 				doorTimer = time.After(doorOpenDuration)
 				continue
 			}
@@ -70,7 +70,7 @@ func RunElevator(fsmWorldviewCh chan t.Worldview, elevatorStateCh chan ElevatorS
 			elevatorState, doorTimer = executeMovementPlan(elevatorState, elevatorStateCh)
 
 		case <-floorTicker.C:
-			if !(obstruct && elevatorState.Behaviour == EB_DoorOpen) && elevio.GetFloor() != -1 {
+			if !(obstructionActive && elevatorState.Behaviour == EB_DoorOpen) && elevio.GetFloor() != -1 {
 				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
 				resetTimer(errorTimer, errorTimeout)
 			}
@@ -92,9 +92,9 @@ func RunElevator(fsmWorldviewCh chan t.Worldview, elevatorStateCh chan ElevatorS
 		case <-stopBtnCh:
 			sendLatestBool(debugPrintReqCh, true)
 
-		case obstruct = <-obstructCh:
+		case obstructionActive = <-obstructionCh:
 			// Clear the error state immediately when the obstruction is removed
-			if !obstruct {
+			if !obstructionActive {
 				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
 				resetTimer(errorTimer, errorTimeout)
 			}

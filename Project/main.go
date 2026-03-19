@@ -19,6 +19,7 @@ func main() {
 	id := setup.GetNodeID()
 
 	// Channels into worldview
+	
 	elevatorStateCh := make(chan fsm.ElevatorState, 1)
 	syncedHallOrdersCh := make(chan wv.HallOrders, 1)
 	peerWorldviewCh := make(chan wv.Worldview, 1)
@@ -38,7 +39,7 @@ func main() {
 	newPeerCh, lostPeerCh := setup.StartPeerDiscovery(id)
 
 	// Channels for network
-	broadcastTx, broadcastRx := setup.SetupWorldviewNetwork()
+	broadcastTx, broadcastRx := setup.StartWorldviewBroadcast()
 
 	go hardware.ButtonLightsListener(lightStateCh)
 	go hardware.ButtonsListener(cabRequestCh, hallRequestCh)
@@ -61,8 +62,8 @@ func main() {
 		ToNetwork:      localWorldviewBroadcastCh,
 		ToFSM:          fsmWorldviewCh,
 	})
-	go assign.RunHallRequestAssigner(id, worldviewsForAssignerCh, assignmentCh)
-	go fsm.RunElevator(fsmWorldviewCh, elevatorStateCh, debugPrintReqCh)
+	go assign.RunAssigner(id, worldviewsForAssignerCh, assignmentCh)
+	go fsm.RunFSM(fsmWorldviewCh, elevatorStateCh, debugPrintReqCh)
 	go setup.ForwardWorldviewFromNetwork(broadcastRx, peerWorldviewCh, initialWorldviewCh)
 
 	fmt.Println("Started")
