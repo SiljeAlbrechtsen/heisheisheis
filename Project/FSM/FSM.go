@@ -9,6 +9,7 @@ import (
 )
 
 const doorOpenDuration = 3000 * time.Millisecond
+const errorTimeout = 3000 * time.Millisecond
 
 func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState, printHallOrdersReqCh chan bool) {
 
@@ -28,7 +29,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 	go elevio.PollFloorSensor(floorSensorCh)
 
 	var doorTimer <-chan time.Time
-	errorTimer := time.NewTimer(3 * time.Second)
+	errorTimer := time.NewTimer(errorTimeout)
 	defer stopAndDrainTimer(errorTimer)
 
 	stopBtnCh := make(chan bool)
@@ -38,7 +39,6 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 	go elevio.PollObstructionSwitch(obstructCh)
 	go hardware.ErrorLight(errorLightCh)
 
-	
 	for {
 		select {
 
@@ -84,7 +84,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 		case <-floorTicker.C:
 			if !(obstruct && elevatorState.Behaviour == EB_DoorOpen) && elevio.GetFloor() != -1 {
 				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
-				resetTimer(errorTimer, 5*time.Second)
+				resetTimer(errorTimer, errorTimeout)
 			}
 			// Fallback: start bevegelse hvis heisen har bestillinger men ikke beveger seg
 			if elevatorCanMove(elevatorState) {
@@ -118,7 +118,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 			// Rydd error-state umiddelbart når obstruction fjernes
 			if !obstruct {
 				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
-				resetTimer(errorTimer, 5*time.Second)
+				resetTimer(errorTimer, errorTimeout)
 			}
 
 		case <-errorTimer.C:
