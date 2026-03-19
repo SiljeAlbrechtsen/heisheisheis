@@ -91,6 +91,25 @@ func syncHallOrders(
 	}
 	//fmt.Printf("[Sync] Starter synk for %s | peers: %s\n", myID, peerList)
 
+	// Steg 0: Propager peerDied — hvis en alive peer har {Unconfirmed, peerDied} og vi har
+	// {Confirmed, _}, skal vi følge ned. Eieren av ordren har markert seg som dead/error,
+	// og denne infoen må spres selv om vi ikke fikk originalbroadcastet fra den feilende heisen.
+	for _, peer := range latestWorldviews {
+		if peer.Dead {
+			continue
+		}
+		for f := 0; f < wv.NumFloors; f++ {
+			for d := 0; d < wv.Directions; d++ {
+				peerOrder := peer.HallOrders[f][d]
+				if peerOrder.SyncState == wv.Unconfirmed &&
+					peerOrder.OwnerID == wv.PeerDied &&
+					myHallOrders[f][d].SyncState == wv.Confirmed {
+					myHallOrders[f][d] = wv.Order{SyncState: wv.Unconfirmed, OwnerID: wv.PeerDied}
+				}
+			}
+		}
+	}
+
 	// Steg 1: Følg peers som er ett steg foran (hopp kun over Dead, ikke ErrorState)
 	for _, peer := range latestWorldviews {
 		if peer.Dead {
