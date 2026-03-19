@@ -28,7 +28,7 @@ func FSM3(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 
 	var doorTimer <-chan time.Time
 	doorTimer = nil
-	errorTimer := time.NewTimer(5 * time.Second)
+	errorTimer := time.NewTimer(3 * time.Second)
 	defer stopAndDrainTimer(errorTimer)
 
 	stopBtnCh := make(chan bool)
