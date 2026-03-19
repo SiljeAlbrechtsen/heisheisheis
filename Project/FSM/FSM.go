@@ -20,7 +20,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 	var prevWorldview t.Worldview
 
 	// Periodisk ticker for fallback-bevegelse og etasjeoppdatering
-	floorTicker := time.NewTicker(500 * time.Millisecond)
+	floorTicker := time.NewTicker(200 * time.Millisecond)
 	defer floorTicker.Stop()
 
 	// Etasjesensor med 20ms polling
@@ -28,7 +28,7 @@ func RunElevator(worldviewToFSMCh chan t.Worldview, elevatorStateCh chan Elevato
 	go elevio.PollFloorSensor(floorSensorCh)
 
 	var doorTimer <-chan time.Time
-	errorTimer := time.NewTimer(5 * time.Second)
+	errorTimer := time.NewTimer(3 * time.Second)
 	defer stopAndDrainTimer(errorTimer)
 
 	stopBtnCh := make(chan bool)
