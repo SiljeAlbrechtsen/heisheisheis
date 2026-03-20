@@ -174,17 +174,15 @@ func syncHallOrders(
 			if order.SyncState == wv.None {
 				myHallOrders[f][d].OwnerID = wv.NoOwner
 			} else if order.SyncState == wv.Confirmed && order.OwnerID != wv.NoOwner && order.OwnerID != wv.PeerDied {
-				// Check if the owner is alive
+				// Check if the owner is alive and not in error state
 				if ownerWv, exists := latestWorldviews[order.OwnerID]; exists {
 					if ownerWv.Dead || ownerWv.ErrorState {
-						// Owner is dead/error - downgrade to unconfirmed with PeerDied marker
-						myHallOrders[f][d].SyncState = wv.Unconfirmed
-						myHallOrders[f][d].OwnerID = wv.PeerDied
+						// Owner is dead/error - reset owner to NoOwner so assigner can reassign it
+						myHallOrders[f][d].OwnerID = wv.NoOwner
 					}
 				} else {
-					// Owner doesn't exist in worldviews - downgrade it
-					myHallOrders[f][d].SyncState = wv.Unconfirmed
-					myHallOrders[f][d].OwnerID = wv.PeerDied
+					// Owner doesn't exist in worldviews - reset to NoOwner
+					myHallOrders[f][d].OwnerID = wv.NoOwner
 				}
 			}
 		}
