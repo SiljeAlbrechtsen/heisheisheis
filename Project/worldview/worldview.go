@@ -103,8 +103,8 @@ func shouldAcceptSyncOrder(localOrder, syncOrder Order) bool {
 		return true
 	}
 
-		// Forward in the cycle (numerically)
-		// Exception: do not reconfirm an order we have already marked as PeerDied
+	// Forward in the cycle (numerically)
+	// Exception: do not reconfirm an order we have already marked as PeerDied
 	if syncOrder.SyncState > localOrder.SyncState {
 		staleConfirm := localOrder.SyncState == Unconfirmed &&
 			localOrder.OwnerID == PeerDied &&
@@ -252,14 +252,15 @@ func updateWorldviewWithElevatorState(worldview Worldview, newState t.ElevatorSt
 	return wv
 }
 
-func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string]AssignmentMatrix) HallOrders {
+func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string]AssignmentMatrix, worldviews map[string]Worldview) HallOrders {
 	ho := hallOrders
 	for floor := 0; floor < NumFloors; floor++ {
 		for dir := 0; dir < Directions; dir++ {
 			if ho[floor][dir].SyncState == Confirmed &&
 				(ho[floor][dir].OwnerID == NoOwner || ho[floor][dir].OwnerID == PeerDied) {
 				for elevatorID, assigned := range assignment {
-					if assigned[floor][dir] {
+					// Only assign to alive elevators
+					if assigned[floor][dir] && !worldviews[elevatorID].Dead && !worldviews[elevatorID].ErrorState {
 						ho[floor][dir].OwnerID = elevatorID
 						break
 					}
@@ -439,7 +440,7 @@ func RunWorldview(myID string, ch WorldviewChannels) {
 
 		case assignment := <-ch.Assignment:
 			wv := worldviews[myID]
-			wv.HallOrders = updateOwnerIDsFromAssignment(wv.HallOrders, assignment)
+			wv.HallOrders = updateOwnerIDsFromAssignment(wv.HallOrders, assignment, worldviews)
 			worldviews[myID] = wv
 			sendLights()
 			sendToNetwork(copyWorldviews(worldviews)[myID])
