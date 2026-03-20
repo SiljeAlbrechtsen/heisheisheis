@@ -253,15 +253,14 @@ func updateWorldviewWithElevatorState(worldview Worldview, newState t.ElevatorSt
 	return wv
 }
 
-func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string]AssignmentMatrix, worldviews map[string]Worldview) HallOrders {
+func updateOwnerIDsFromAssignment(hallOrders HallOrders, assignment map[string]AssignmentMatrix) HallOrders {
 	ho := hallOrders
 	for floor := 0; floor < NumFloors; floor++ {
 		for dir := 0; dir < Directions; dir++ {
 			if ho[floor][dir].SyncState == Confirmed &&
 				(ho[floor][dir].OwnerID == NoOwner || ho[floor][dir].OwnerID == PeerDied) {
 				for elevatorID, assigned := range assignment {
-					// Only assign to alive elevators
-					if assigned[floor][dir] && !worldviews[elevatorID].Dead && !worldviews[elevatorID].ErrorState {
+					if assigned[floor][dir] {
 						ho[floor][dir].OwnerID = elevatorID
 						break
 					}
@@ -424,7 +423,6 @@ func RunWorldview(myID string, ch WorldviewChannels) {
 			worldviews = handleLostPeer(worldviews, myID, lostPeerID)
 			sendToNetwork(copyWorldviews(worldviews)[myID])
 			sendToSync(copyWorldviews(worldviews))
-			sendToAssigner(copyWorldviews(worldviews))
 
 		case hallBtn := <-ch.HallBtn:
 			if networkAvailable {
@@ -442,7 +440,7 @@ func RunWorldview(myID string, ch WorldviewChannels) {
 
 		case assignment := <-ch.Assignment:
 			wv := worldviews[myID]
-			wv.HallOrders = updateOwnerIDsFromAssignment(wv.HallOrders, assignment, worldviews)
+			wv.HallOrders = updateOwnerIDsFromAssignment(wv.HallOrders, assignment)
 			worldviews[myID] = wv
 			sendLights()
 			sendToNetwork(copyWorldviews(worldviews)[myID])

@@ -166,10 +166,26 @@ func syncHallOrders(
 	}
 
 	// Step 4: Normalize. None orders should never have an owner.
+	// Also ensure confirmed orders never have a dead/error/disconnected owner.
 	for f := 0; f < wv.NumFloors; f++ {
 		for d := 0; d < wv.Directions; d++ {
-			if myHallOrders[f][d].SyncState == wv.None {
+			order := myHallOrders[f][d]
+
+			if order.SyncState == wv.None {
 				myHallOrders[f][d].OwnerID = wv.NoOwner
+			} else if order.SyncState == wv.Confirmed && order.OwnerID != wv.NoOwner && order.OwnerID != wv.PeerDied {
+				// Check if the owner is alive
+				if ownerWv, exists := latestWorldviews[order.OwnerID]; exists {
+					if ownerWv.Dead || ownerWv.ErrorState {
+						// Owner is dead/error - downgrade to unconfirmed with PeerDied marker
+						myHallOrders[f][d].SyncState = wv.Unconfirmed
+						myHallOrders[f][d].OwnerID = wv.PeerDied
+					}
+				} else {
+					// Owner doesn't exist in worldviews - downgrade it
+					myHallOrders[f][d].SyncState = wv.Unconfirmed
+					myHallOrders[f][d].OwnerID = wv.PeerDied
+				}
 			}
 		}
 	}
