@@ -37,7 +37,6 @@ func RunFSM(fsmWorldviewCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 	go elevio.PollObstructionSwitch(obstructionCh)
 	go hardware.ErrorLight(errorLightCh)
 
-	
 	for {
 		select {
 
@@ -94,9 +93,14 @@ func RunFSM(fsmWorldviewCh chan t.Worldview, elevatorStateCh chan ElevatorState,
 
 		case obstructionActive = <-obstructionCh:
 			// Clear the error state immediately when the obstruction is removed
+			if obstructionActive && elevatorState.Behaviour == EB_DoorOpen {
+				resetTimer(errorTimer, errorTimeout)
+			}
 			if !obstructionActive {
 				sendLatestBool(errorLightCh, updateErrorState(false, &elevatorState, elevatorStateCh))
 				resetTimer(errorTimer, errorTimeout)
+				doorTimer = time.After(doorOpenDuration)
+
 			}
 
 		case <-errorTimer.C:
