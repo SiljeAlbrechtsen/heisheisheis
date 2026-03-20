@@ -111,7 +111,16 @@ func assignHallRequests(latestWorldviews map[string]wv.Worldview, myID string) (
 	var result map[string]wv.AssignmentMatrix
 	err = json.Unmarshal(output, &result)
 
-	return result, nil
+	// Filter out assignments for elevators that were not in the input (dead/error elevators)
+	// Only keep assignments for elevators that are alive and were sent to the assigner
+	filteredResult := make(map[string]wv.AssignmentMatrix)
+	for elevatorID, assignment := range result {
+		if _, exists := assignerInput.States[elevatorID]; exists {
+			filteredResult[elevatorID] = assignment
+		}
+	}
+
+	return filteredResult, nil
 }
 
 func RunAssigner(
