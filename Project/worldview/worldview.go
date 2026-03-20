@@ -176,14 +176,15 @@ func applyPeerWorldview(worldviews map[string]Worldview, peerWorldview Worldview
 	return worldviews
 }
 
-// markPeerDeadInHallOrders downgrades Confirmed orders owned by lostId to
+// markPeerDeadInHallOrders downgrades orders owned by lostId to
 // Unconfirmed/PeerDied so that other elevators can take over the order.
 func markPeerDeadInHallOrders(hallOrders HallOrders, lostId string) HallOrders {
 	ho := hallOrders
 	for i, row := range ho {
 		for j := range row {
 			order := ho[i][j]
-			if order.OwnerID == lostId && order.SyncState == Confirmed {
+			// Mark any non-None order owned by the dead peer
+			if order.OwnerID == lostId && order.SyncState != None {
 				order.SyncState = Unconfirmed
 				order.OwnerID = PeerDied
 			}
@@ -423,6 +424,7 @@ func RunWorldview(myID string, ch WorldviewChannels) {
 			worldviews = handleLostPeer(worldviews, myID, lostPeerID)
 			sendToNetwork(copyWorldviews(worldviews)[myID])
 			sendToSync(copyWorldviews(worldviews))
+			sendToAssigner(copyWorldviews(worldviews))
 
 		case hallBtn := <-ch.HallBtn:
 			if networkAvailable {
