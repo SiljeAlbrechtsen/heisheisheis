@@ -405,11 +405,15 @@ func RunWorldview(myID string, ch WorldviewChannels) {
 			fmt.Printf("[Worldview] Ny peer oppdaget: %s\n", newPeerID)
 			if newPeerID == myID {
 				networkAvailable = true
-				// Restore hallOrders from a known peer on reconnect
+				// Restore hallOrders and AllCabOrders from a known peer on reconnect
 				wv := worldviews[myID]
 				for id, peerWorldview := range worldviews {
 					if id != myID {
 						wv.HallOrders = peerWorldview.HallOrders
+						// Also restore this elevator's cab orders from how the peer views them
+						if peerWorldview.AllCabOrders != nil {
+							wv.AllCabOrders[myID] = peerWorldview.AllCabOrders[myID]
+						}
 						break
 					}
 				}
